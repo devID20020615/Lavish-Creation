@@ -1,0 +1,81 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-warm-ivory: #FAF8F5;
+    --bg-soft-cream: #F7F2EA;
+    --accent-gold: #D4B16A;
+    --accent-brass: #B68C4A;
+    --assamese-red: #8C1D18;
+    --deep-maroon: #5A0F12;
+    --bamboo-beige: #D8C2A3;
+    --text-charcoal: #242424;
+    --text-dark-brown: #3A2F28;
+  }
+
+  body, input, textarea, select, button {
+    background-color: var(--bg-warm-ivory);
+    color: var(--text-charcoal);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-serif-playfair, .font-serif-cormorant {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+
+  /* Assamese font class (Hind Siliguri) */
+  .font-assamese {
+    font-family: 'Hind Siliguri', -apple-system, sans-serif !important;
+  }
+}
+
+/* Custom Assamese Gamosa Woven Border */
+.gamosa-border {
+  background-image: repeating-linear-gradient(
+    90deg,
+    #8C1D18 0px,
+    #8C1D18 6px,
+    transparent 6px,
+    transparent 10px,
+    #8C1D18 10px,
+    #8C1D18 12px,
+    transparent 12px,
+    transparent 16px
+  );
+  height: 3px;
+  width: 100%;
+}
+
+/* Subtle Assamese Weave Background Texture */
+.assamese-weave-pattern {
+  background-color: #FAF8F5;
+  background-image: radial-gradient(#8C1D18 0.45px, transparent 0.45px), radial-gradient(#B68C4A 0.45px, #FAF8F5 0.45px);
+  background-size: 18px 18px;
+  background-position: 0 0, 9px 9px;
+  background-opacity: 0.03;
+}
+
+/* Custom subtle scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #FAF8F5;
+}
+::-webkit-scrollbar-thumb {
+  background: #D8C2A3;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #B68C4A;
+}
+
+@keyframes float-gentle {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-6px) rotate(1deg); }
+}
+
+.animate-float {
+  animation: float-gentle 6s ease-in-out infinite;
+}
+
