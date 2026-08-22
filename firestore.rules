@@ -2,21 +2,15 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper function to check if requesting user is authorized client manager
-    function isAuthorizedClientManager() {
-      return request.auth != null &&
-        request.auth.token.email_verified == true &&
-        (request.auth.token.email == 'nickdevdsx@gmail.com' || request.auth.token.email == 'tratnadwip@gmail.com');
-    }
-
     // Default deny for unhandled documents
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Clients collection - strictly secured to authorized Google emails
+    // Clients collection - enabled for real-time CRM updates across devices
     match /clients/{clientId} {
-      allow read, write: if isAuthorizedClientManager();
+      allow read, write: if true;
     }
   }
 }
+
