@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   X, Plus, Trash2, Edit3, Save, RefreshCw, LogOut, Image, MessageSquare,
   PhoneCall, ShieldAlert, Check, Search, Filter, Sparkles, Layers, Tag, Layout, Eye, EyeOff,
-  Wand2, Loader2, Link2, Instagram, Video, Play, ChevronDown, ChevronUp
+  Wand2, Loader2, Link2, Instagram, Video, Play, ChevronDown, ChevronUp, Users
 } from 'lucide-react';
+import { ClientManagement } from './ClientManagement';
 import { GalleryItem } from '../types';
 import {
   subscribeStorage,
@@ -47,7 +48,7 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'gallery' | 'hero' | 'videos' | 'testimonials' | 'settings'>('gallery');
+  const [activeTab, setActiveTab] = useState<'gallery' | 'hero' | 'videos' | 'testimonials' | 'settings' | 'clients'>('gallery');
   const [isTabDropdownOpen, setIsTabDropdownOpen] = useState(false);
   const tabDropdownRef = React.useRef<HTMLDivElement>(null);
 
@@ -930,6 +931,12 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
               label: 'WhatsApp & Contact',
               icon: PhoneCall,
               subtitle: 'Phone numbers, address & Instagram'
+            },
+            {
+              id: 'clients' as const,
+              label: 'Clients',
+              icon: Users,
+              subtitle: 'Client CRM, billing, payments & project tracking'
             }
           ];
 
@@ -1825,6 +1832,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
             </div>
           )}
 
+          {/* ================= TAB: CLIENTS CRM & GOOGLE VERIFICATION ================= */}
+          {activeTab === 'clients' && (
+            <ClientManagement />
+          )}
 
         </div>
 
