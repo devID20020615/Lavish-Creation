@@ -6,11 +6,73 @@ import {
   deleteDoc,
   onSnapshot,
   query,
-  orderBy,
-  serverTimestamp
+  orderBy
 } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType } from './firebase';
 import { Client, PaymentStatus, ProjectStatus } from '../types';
+
+const LOCAL_STORAGE_CLIENTS_KEY = 'bb_decoration_clients_crm_records_v1';
+
+// Initial sample clients for instant initial usage if storage is empty
+const SAMPLE_CLIENTS: Client[] = [
+  {
+    id: 'sample-client-1',
+    name: 'Ananya & Rahul Dutta',
+    companyName: 'Dutta Family Wedding',
+    address: 'Guwahati, Assam',
+    phone: '+91 98765 43210',
+    email: 'ananya.dutta@example.com',
+    projectName: 'Grand Mandap & Floral Decor',
+    fullPayment: 150000,
+    advancePayment: 50000,
+    remainingPayment: 100000,
+    paymentStatus: 'Partially Paid',
+    projectStatus: 'Confirmed',
+    notes: 'Traditional Assamese gamosa floral motifs with warm marigold lights.',
+    createdAt: new Date(Date.now() - 86400000 * 5).toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    id: 'sample-client-2',
+    name: 'Barman Corporate Event',
+    companyName: 'Barman Traders Pvt Ltd',
+    address: 'Jorhat, Assam',
+    phone: '+91 91234 56789',
+    email: 'info@barmantraders.com',
+    projectName: 'Annual Gala Stage & Entrance Arch',
+    fullPayment: 80000,
+    advancePayment: 80000,
+    remainingPayment: 0,
+    paymentStatus: 'Fully Paid',
+    projectStatus: 'Completed',
+    notes: 'Fully paid via bank transfer. Stage backdrop & sound system.',
+    createdAt: new Date(Date.now() - 86400000 * 12).toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
+export function getLocalClients(): Client[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_CLIENTS_KEY);
+    if (!raw) {
+      localStorage.setItem(LOCAL_STORAGE_CLIENTS_KEY, JSON.stringify(SAMPLE_CLIENTS));
+      return SAMPLE_CLIENTS;
+    }
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : SAMPLE_CLIENTS;
+  } catch (err) {
+    console.error('Failed to read local clients storage:', err);
+    return SAMPLE_CLIENTS;
+  }
+}
+
+export function saveLocalClients(clients: Client[]): void {
+  try {
+    localStorage.setItem(LOCAL_STORAGE_CLIENTS_KEY, JSON.stringify(clients));
+  } catch (err) {
+    console.error('Failed to save to local clients storage:', err);
+  }
+}
 
 export function calculatePaymentDetails(fullPaymentInput: number, advancePaymentInput: number): {
   fullPayment: number;
@@ -43,44 +105,63 @@ export function subscribeToClients(
   onData: (clients: Client[]) => void,
   onError?: (error: any) => void
 ) {
-  const clientsRef = collection(db, 'clients');
-  const q = query(clientsRef, orderBy('createdAt', 'desc'));
+  let isFirestoreActive = true;
 
-  return onSnapshot(
-    q,
-    (snapshot) => {
-      const clientsList: Client[] = snapshot.docs.map((docSnap) => {
-        const data = docSnap.data();
-        const full = Number(data.fullPayment) || 0;
-        const advance = Number(data.advancePayment) || 0;
-        const { remainingPayment, paymentStatus } = calculatePaymentDetails(full, advance);
+  try {
+    const clientsRef = collection(db, 'clients');
+    const q = query(clientsRef, orderBy('createdAt', 'desc'));
 
-        return {
-          id: docSnap.id,
-          name: data.name || '',
-          companyName: data.companyName || '',
-          address: data.address || '',
-          phone: data.phone || '',
-          email: data.email || '',
-          projectName: data.projectName || '',
-          fullPayment: full,
-          advancePayment: advance,
-          remainingPayment: data.remainingPayment !== undefined ? Number(data.remainingPayment) : remainingPayment,
-          paymentStatus: data.paymentStatus || paymentStatus,
-          projectStatus: (data.projectStatus as ProjectStatus) || 'Inquiry',
-          notes: data.notes || '',
-          createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString()),
-          updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (data.updatedAt || new Date().toISOString()),
-        };
-      });
-      onData(clientsList);
-    },
-    (err) => {
-      console.error('Error fetching clients from Firestore:', err);
-      if (onError) onError(err);
-      handleFirestoreError(err, OperationType.LIST, 'clients');
-    }
-  );
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        if (!isFirestoreActive) return;
+        const clientsList: Client[] = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+          const full = Number(data.fullPayment) || 0;
+          const advance = Number(data.advancePayment) || 0;
+          const { remainingPayment, paymentStatus } = calculatePaymentDetails(full, advance);
+
+          return {
+            id: docSnap.id,
+            name: data.name || '',
+            companyName: data.companyName || '',
+            address: data.address || '',
+            phone: data.phone || '',
+            email: data.email || '',
+            projectName: data.projectName || '',
+            fullPayment: full,
+            advancePayment: advance,
+            remainingPayment: data.remainingPayment !== undefined ? Number(data.remainingPayment) : remainingPayment,
+            paymentStatus: data.paymentStatus || paymentStatus,
+            projectStatus: (data.projectStatus as ProjectStatus) || 'Inquiry',
+            notes: data.notes || '',
+            createdAt: data.createdAt?.toDate ? data.createdAt.toDate().toISOString() : (data.createdAt || new Date().toISOString()),
+            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString() : (data.updatedAt || new Date().toISOString()),
+          };
+        });
+
+        saveLocalClients(clientsList);
+        onData(clientsList);
+      },
+      (err) => {
+        console.warn('Firestore fallback to local storage mode:', err?.message || err);
+        isFirestoreActive = false;
+        const local = getLocalClients();
+        onData(local);
+        if (onError) onError(err);
+      }
+    );
+
+    return () => {
+      isFirestoreActive = false;
+      unsubscribe();
+    };
+  } catch (err) {
+    console.warn('Firestore init failed, using local storage:', err);
+    const local = getLocalClients();
+    onData(local);
+    return () => {};
+  }
 }
 
 export async function addClientRecord(clientData: {
@@ -95,40 +176,78 @@ export async function addClientRecord(clientData: {
   projectStatus: ProjectStatus;
   notes?: string;
 }): Promise<string> {
+  const { fullPayment, advancePayment, remainingPayment, paymentStatus } = calculatePaymentDetails(
+    clientData.fullPayment,
+    clientData.advancePayment
+  );
+
+  const newId = 'client-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
+  const nowIso = new Date().toISOString();
+
+  const newClientRecord: Client = {
+    id: newId,
+    name: clientData.name.trim(),
+    companyName: (clientData.companyName || '').trim(),
+    address: (clientData.address || '').trim(),
+    phone: (clientData.phone || '').trim(),
+    email: (clientData.email || '').trim(),
+    projectName: clientData.projectName.trim(),
+    fullPayment,
+    advancePayment,
+    remainingPayment,
+    paymentStatus,
+    projectStatus: clientData.projectStatus || 'Inquiry',
+    notes: (clientData.notes || '').trim(),
+    createdAt: nowIso,
+    updatedAt: nowIso
+  };
+
+  // 1. Save to local storage first for instant guaranteed response
+  const localList = getLocalClients();
+  const updatedList = [newClientRecord, ...localList];
+  saveLocalClients(updatedList);
+
+  // 2. Try Firestore
   try {
-    const { fullPayment, advancePayment, remainingPayment, paymentStatus } = calculatePaymentDetails(
-      clientData.fullPayment,
-      clientData.advancePayment
-    );
-
-    const docRef = await addDoc(collection(db, 'clients'), {
-      name: clientData.name.trim(),
-      companyName: (clientData.companyName || '').trim(),
-      address: (clientData.address || '').trim(),
-      phone: (clientData.phone || '').trim(),
-      email: (clientData.email || '').trim(),
-      projectName: clientData.projectName.trim(),
-      fullPayment,
-      advancePayment,
-      remainingPayment,
-      paymentStatus,
-      projectStatus: clientData.projectStatus || 'Inquiry',
-      notes: (clientData.notes || '').trim(),
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+    await addDoc(collection(db, 'clients'), {
+      ...newClientRecord,
+      createdAt: nowIso,
+      updatedAt: nowIso
     });
-
-    return docRef.id;
   } catch (error) {
-    handleFirestoreError(error, OperationType.CREATE, 'clients');
-    throw error;
+    console.warn('Firestore create failed, stored locally:', error);
   }
+
+  return newId;
 }
 
 export async function updateClientRecord(
   clientId: string,
   clientData: Partial<Client>
 ): Promise<void> {
+  const localList = getLocalClients();
+  const index = localList.findIndex((c) => c.id === clientId);
+
+  if (index !== -1) {
+    const existing = localList[index];
+    const full = clientData.fullPayment !== undefined ? clientData.fullPayment : existing.fullPayment;
+    const advance = clientData.advancePayment !== undefined ? clientData.advancePayment : existing.advancePayment;
+    const { fullPayment, advancePayment, remainingPayment, paymentStatus } = calculatePaymentDetails(full, advance);
+
+    const updatedRecord: Client = {
+      ...existing,
+      ...clientData,
+      fullPayment,
+      advancePayment,
+      remainingPayment,
+      paymentStatus,
+      updatedAt: new Date().toISOString()
+    };
+
+    localList[index] = updatedRecord;
+    saveLocalClients(localList);
+  }
+
   try {
     const updatePayload: Record<string, any> = { ...clientData };
     delete updatePayload.id;
@@ -148,17 +267,19 @@ export async function updateClientRecord(
     const clientDocRef = doc(db, 'clients', clientId);
     await updateDoc(clientDocRef, updatePayload);
   } catch (error) {
-    handleFirestoreError(error, OperationType.UPDATE, `clients/${clientId}`);
-    throw error;
+    console.warn('Firestore update failed, updated locally:', error);
   }
 }
 
 export async function deleteClientRecord(clientId: string): Promise<void> {
+  const localList = getLocalClients();
+  const filtered = localList.filter((c) => c.id !== clientId);
+  saveLocalClients(filtered);
+
   try {
     const clientDocRef = doc(db, 'clients', clientId);
     await deleteDoc(clientDocRef);
   } catch (error) {
-    handleFirestoreError(error, OperationType.DELETE, `clients/${clientId}`);
-    throw error;
+    console.warn('Firestore delete failed, deleted locally:', error);
   }
 }
