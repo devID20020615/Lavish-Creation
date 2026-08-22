@@ -1092,7 +1092,7 @@ export const ClientManagement: React.FC = () => {
                       <input
                         type="number"
                         min="0"
-                        step="500"
+                        step="any"
                         value={formData.fullPayment}
                         onChange={(e) => setFormData({ ...formData, fullPayment: e.target.value })}
                         placeholder="e.g. 150000"
@@ -1107,7 +1107,7 @@ export const ClientManagement: React.FC = () => {
                       <input
                         type="number"
                         min="0"
-                        step="500"
+                        step="any"
                         value={formData.advancePayment}
                         onChange={(e) => setFormData({ ...formData, advancePayment: e.target.value })}
                         placeholder="e.g. 50000"
