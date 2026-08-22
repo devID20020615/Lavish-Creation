@@ -101,11 +101,30 @@ export function calculatePaymentDetails(fullPaymentInput: number, advancePayment
   };
 }
 
+// Event listeners for real-time local sync when Firestore is offline or permission-restricted
+type ClientListener = (clients: Client[]) => void;
+const activeListeners = new Set<ClientListener>();
+
+function notifyListeners(clients: Client[]): void {
+  activeListeners.forEach((listener) => {
+    try {
+      listener(clients);
+    } catch (err) {
+      console.error('Listener notification error:', err);
+    }
+  });
+}
+
 export function subscribeToClients(
   onData: (clients: Client[]) => void,
   onError?: (error: any) => void
 ) {
   let isFirestoreActive = true;
+  activeListeners.add(onData);
+
+  // Send current local clients immediately for instant UI render
+  const initialLocal = getLocalClients();
+  onData(initialLocal);
 
   try {
     const clientsRef = collection(db, 'clients');
@@ -141,7 +160,7 @@ export function subscribeToClients(
         });
 
         saveLocalClients(clientsList);
-        onData(clientsList);
+        notifyListeners(clientsList);
       },
       (err) => {
         console.warn('Firestore fallback to local storage mode:', err?.message || err);
@@ -154,13 +173,16 @@ export function subscribeToClients(
 
     return () => {
       isFirestoreActive = false;
+      activeListeners.delete(onData);
       unsubscribe();
     };
   } catch (err) {
     console.warn('Firestore init failed, using local storage:', err);
     const local = getLocalClients();
     onData(local);
-    return () => {};
+    return () => {
+      activeListeners.delete(onData);
+    };
   }
 }
 
@@ -181,11 +203,10 @@ export async function addClientRecord(clientData: {
     clientData.advancePayment
   );
 
-  const newId = 'client-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
   const nowIso = new Date().toISOString();
+  let createdId = 'client-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
 
-  const newClientRecord: Client = {
-    id: newId,
+  const payload = {
     name: clientData.name.trim(),
     companyName: (clientData.companyName || '').trim(),
     address: (clientData.address || '').trim(),
@@ -202,23 +223,29 @@ export async function addClientRecord(clientData: {
     updatedAt: nowIso
   };
 
-  // 1. Save to local storage first for instant guaranteed response
-  const localList = getLocalClients();
-  const updatedList = [newClientRecord, ...localList];
-  saveLocalClients(updatedList);
-
-  // 2. Try Firestore
+  // Try Firestore first
   try {
-    await addDoc(collection(db, 'clients'), {
-      ...newClientRecord,
-      createdAt: nowIso,
-      updatedAt: nowIso
-    });
+    const docRef = await addDoc(collection(db, 'clients'), payload);
+    if (docRef?.id) {
+      createdId = docRef.id;
+    }
   } catch (error) {
     console.warn('Firestore create failed, stored locally:', error);
   }
 
-  return newId;
+  const newClientRecord: Client = {
+    id: createdId,
+    ...payload
+  };
+
+  // Save to local storage and broadcast to listeners
+  const localList = getLocalClients();
+  const filtered = localList.filter((c) => c.id !== createdId);
+  const updatedList = [newClientRecord, ...filtered];
+  saveLocalClients(updatedList);
+  notifyListeners(updatedList);
+
+  return createdId;
 }
 
 export async function updateClientRecord(
@@ -228,6 +255,7 @@ export async function updateClientRecord(
   const localList = getLocalClients();
   const index = localList.findIndex((c) => c.id === clientId);
 
+  let updatedList = [...localList];
   if (index !== -1) {
     const existing = localList[index];
     const full = clientData.fullPayment !== undefined ? clientData.fullPayment : existing.fullPayment;
@@ -244,8 +272,9 @@ export async function updateClientRecord(
       updatedAt: new Date().toISOString()
     };
 
-    localList[index] = updatedRecord;
-    saveLocalClients(localList);
+    updatedList[index] = updatedRecord;
+    saveLocalClients(updatedList);
+    notifyListeners(updatedList);
   }
 
   try {
@@ -271,10 +300,11 @@ export async function updateClientRecord(
   }
 }
 
-export async function deleteClientRecord(clientId: string): Promise<void> {
+export async function deleteClientRecord(clientId: string): Promise<Client[]> {
   const localList = getLocalClients();
-  const filtered = localList.filter((c) => c.id !== clientId);
-  saveLocalClients(filtered);
+  const updatedList = localList.filter((c) => c.id !== clientId);
+  saveLocalClients(updatedList);
+  notifyListeners(updatedList);
 
   try {
     const clientDocRef = doc(db, 'clients', clientId);
@@ -282,4 +312,6 @@ export async function deleteClientRecord(clientId: string): Promise<void> {
   } catch (error) {
     console.warn('Firestore delete failed, deleted locally:', error);
   }
+
+  return updatedList;
 }
