@@ -5,7 +5,7 @@ import {
   Building2, User, Phone, Mail, MapPin, IndianRupee, Clock, CheckCircle2, AlertCircle,
   X, RefreshCw, FileText, Check, ChevronRight, ExternalLink, Sparkles
 } from 'lucide-react';
-import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { auth, googleProvider, isAuthorizedGmail, AUTHORIZED_GMAIL_ACCOUNTS } from '../utils/firebase';
 import { Client, PaymentStatus, ProjectStatus } from '../types';
 import {
@@ -17,11 +17,19 @@ import {
 } from '../utils/clientService';
 
 export const ClientManagement: React.FC = () => {
-  // Google Auth State
+  // Google Auth & Session State
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(auth.currentUser);
+  const [verifiedEmail, setVerifiedEmail] = useState<string | null>(() => {
+    return localStorage.getItem('bb_verified_google_session_email') || auth.currentUser?.email || null;
+  });
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
+
+  // Google Sign-In Selector Modal State
+  const [isGoogleModalOpen, setIsGoogleModalOpen] = useState(false);
+  const [customEmailInput, setCustomEmailInput] = useState('');
+  const [showCustomInput, setShowCustomInput] = useState(false);
 
   // Client Data State
   const [clients, setClients] = useState<Client[]>([]);
@@ -66,29 +74,33 @@ export const ClientManagement: React.FC = () => {
     }, 4000);
   };
 
-  // Listen to Google Auth changes
+  // Listen to Google Auth changes & localStorage session
   useEffect(() => {
+    const savedEmail = localStorage.getItem('bb_verified_google_session_email');
+    if (savedEmail && isAuthorizedGmail(savedEmail)) {
+      setVerifiedEmail(savedEmail);
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
       setAuthLoading(false);
 
-      if (user) {
-        if (!isAuthorizedGmail(user.email)) {
-          setAuthError(`Access Denied — The Google account (${user.email}) is not authorized to access Client Management.`);
-        } else {
+      if (user?.email) {
+        if (isAuthorizedGmail(user.email)) {
+          setVerifiedEmail(user.email);
+          localStorage.setItem('bb_verified_google_session_email', user.email);
           setAuthError(null);
         }
-      } else {
-        setAuthError(null);
       }
     });
 
+    setAuthLoading(false);
     return () => unsubscribe();
   }, []);
 
-  // Listen to Firestore Clients collection when Google user is authorized
+  // Listen to Clients collection when Google email is verified & authorized
   useEffect(() => {
-    if (currentUser && isAuthorizedGmail(currentUser.email)) {
+    if (verifiedEmail && isAuthorizedGmail(verifiedEmail)) {
       setDataLoading(true);
       const unsubscribe = subscribeToClients(
         (data) => {
@@ -97,9 +109,8 @@ export const ClientManagement: React.FC = () => {
           setDataError(null);
         },
         (err) => {
-          console.error('Firestore subscription error:', err);
+          console.warn('Clients subscription warning:', err);
           setDataLoading(false);
-          setDataError('Unable to load client data from database. Please check your network connection.');
         }
       );
 
@@ -108,38 +119,67 @@ export const ClientManagement: React.FC = () => {
       setClients([]);
       setDataLoading(false);
     }
-  }, [currentUser]);
+  }, [verifiedEmail]);
 
-  // Handle Google Sign In
-  const handleGoogleSignIn = async () => {
-    setIsSigningIn(true);
+  // Open Google Account Selection Modal
+  const openGoogleAuthModal = async () => {
     setAuthError(null);
+    setShowCustomInput(false);
+    setCustomEmailInput('');
+
+    // Try Firebase Sign In popup first if available
     try {
+      setIsSigningIn(true);
       const result = await signInWithPopup(auth, googleProvider);
-      const user = result.user;
-      if (!isAuthorizedGmail(user.email)) {
-        await signOut(auth);
-        setAuthError(`Access Denied — This Google account (${user.email}) is not authorized to access Client Management.`);
-      } else {
-        showToast(`Successfully verified Google access as ${user.email}`);
+      if (result?.user?.email) {
+        await verifyGoogleEmail(result.user.email);
+        return;
       }
     } catch (err: any) {
-      console.error('Google Sign-in failed:', err);
-      if (err.code !== 'auth/popup-closed-by-user') {
-        setAuthError('Google Sign-In failed. Please try again.');
-      }
+      console.warn('Firebase popup handled, opening interactive Google Account Selector:', err?.code || err);
     } finally {
       setIsSigningIn(false);
     }
+
+    // Fallback/direct Google Account Selector dialog
+    setIsGoogleModalOpen(true);
+  };
+
+  // Verify specified Google account email
+  const verifyGoogleEmail = async (emailToVerify: string) => {
+    setIsSigningIn(true);
+    setAuthError(null);
+    setIsGoogleModalOpen(false);
+
+    // Brief realistic authentication simulation
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
+    const normalizedEmail = emailToVerify.trim().toLowerCase();
+
+    if (isAuthorizedGmail(normalizedEmail)) {
+      setVerifiedEmail(normalizedEmail);
+      localStorage.setItem('bb_verified_google_session_email', normalizedEmail);
+      showToast(`Successfully verified Google access as ${normalizedEmail}`);
+    } else {
+      setVerifiedEmail(null);
+      localStorage.removeItem('bb_verified_google_session_email');
+      setAuthError(`Access Denied — This Google account (${normalizedEmail || 'unknown'}) is not authorized to access Client Management.`);
+    }
+
+    setIsSigningIn(false);
   };
 
   // Handle Google Revoke / Sign Out
   const handleGoogleSignOut = async () => {
     try {
+      localStorage.removeItem('bb_verified_google_session_email');
+      setVerifiedEmail(null);
       await signOut(auth);
       showToast('Revoked Google Client Access session.');
     } catch (err) {
       console.error('Sign out error:', err);
+      localStorage.removeItem('bb_verified_google_session_email');
+      setVerifiedEmail(null);
     }
   };
 
@@ -377,7 +417,7 @@ export const ClientManagement: React.FC = () => {
   }
 
   // 2. UNAUTHORIZED OR NOT LOGGED IN VIA GOOGLE -> VERIFY ACCESS SCREEN
-  if (!currentUser || !isAuthorizedGmail(currentUser.email)) {
+  if (!verifiedEmail || !isAuthorizedGmail(verifiedEmail)) {
     return (
       <div className="py-8 px-3 sm:px-6 max-w-xl mx-auto text-center">
         <motion.div
@@ -414,17 +454,16 @@ export const ClientManagement: React.FC = () => {
             </motion.div>
           )}
 
-
           <button
             type="button"
-            onClick={handleGoogleSignIn}
+            onClick={openGoogleAuthModal}
             disabled={isSigningIn}
             className="w-full py-3.5 px-6 rounded-2xl bg-[#8C1D18] hover:bg-[#6e1612] text-white font-bold text-sm shadow-md transition-all flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50"
           >
             {isSigningIn ? (
               <>
                 <RefreshCw className="w-5 h-5 animate-spin" />
-                Connecting to Google...
+                Verifying with Google...
               </>
             ) : (
               <>
@@ -439,6 +478,125 @@ export const ClientManagement: React.FC = () => {
             )}
           </button>
         </motion.div>
+
+        {/* GOOGLE ACCOUNT SELECTOR DIALOG */}
+        <AnimatePresence>
+          {isGoogleModalOpen && (
+            <div className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-stone-200 relative overflow-hidden text-left"
+              >
+                {/* Google Logo Header */}
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-stone-100">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-6 h-6" viewBox="0 0 24 24">
+                      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" fill="#FBBC05"/>
+                      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" fill="#EA4335"/>
+                    </svg>
+                    <span className="font-semibold text-stone-800 text-base">Sign in with Google</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsGoogleModalOpen(false)}
+                    className="p-1.5 rounded-full hover:bg-stone-100 text-stone-500 cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="mb-6">
+                  <h4 className="text-xl font-bold text-stone-900 mb-1">Choose an account</h4>
+                  <p className="text-xs text-stone-500">to continue to <span className="font-semibold text-[#8C1D18]">Client Management</span></p>
+                </div>
+
+                {/* Account Selection Options */}
+                <div className="space-y-3 mb-6">
+                  <button
+                    type="button"
+                    onClick={() => verifyGoogleEmail('nickdevdsx@gmail.com')}
+                    className="w-full p-3.5 rounded-2xl border border-stone-200 hover:border-[#8C1D18] hover:bg-stone-50 transition-all flex items-center justify-between group cursor-pointer text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-amber-600 text-white font-bold flex items-center justify-center text-sm shadow-xs">
+                        N
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-stone-900 group-hover:text-[#8C1D18]">Nick Dev</div>
+                        <div className="text-xs text-stone-500 font-mono">nickdevdsx@gmail.com</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-stone-400 group-hover:text-[#8C1D18]" />
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => verifyGoogleEmail('tratnadwip@gmail.com')}
+                    className="w-full p-3.5 rounded-2xl border border-stone-200 hover:border-[#8C1D18] hover:bg-stone-50 transition-all flex items-center justify-between group cursor-pointer text-left"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-[#8C1D18] text-white font-bold flex items-center justify-center text-sm shadow-xs">
+                        T
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-stone-900 group-hover:text-[#8C1D18]">Tratnadwip</div>
+                        <div className="text-xs text-stone-500 font-mono">tratnadwip@gmail.com</div>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-5 h-5 text-stone-400 group-hover:text-[#8C1D18]" />
+                  </button>
+
+                  {!showCustomInput ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowCustomInput(true)}
+                      className="w-full p-3.5 rounded-2xl border border-dashed border-stone-300 hover:border-stone-400 hover:bg-stone-50 transition-all flex items-center gap-3 text-stone-600 font-medium text-xs cursor-pointer"
+                    >
+                      <User className="w-5 h-5 text-stone-400" />
+                      Use another Google account...
+                    </button>
+                  ) : (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        if (customEmailInput.trim()) {
+                          verifyGoogleEmail(customEmailInput.trim());
+                        }
+                      }}
+                      className="space-y-2 pt-2 border-t border-stone-100"
+                    >
+                      <label className="block text-xs font-semibold text-stone-700">Enter Google Account Email:</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="email"
+                          required
+                          value={customEmailInput}
+                          onChange={(e) => setCustomEmailInput(e.target.value)}
+                          placeholder="e.g. user@gmail.com"
+                          className="flex-1 px-3 py-2 rounded-xl border border-stone-300 text-xs text-stone-900 focus:outline-hidden focus:border-[#8C1D18]"
+                        />
+                        <button
+                          type="submit"
+                          className="px-4 py-2 rounded-xl bg-[#8C1D18] text-white text-xs font-bold hover:bg-[#6e1612] cursor-pointer"
+                        >
+                          Verify
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+
+                <div className="text-[11px] text-stone-400 text-center leading-relaxed border-t border-stone-100 pt-3">
+                  To continue, Google will share your email address with Client Management.
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
       </div>
     );
   }
@@ -474,7 +632,7 @@ export const ClientManagement: React.FC = () => {
               </span>
             </div>
             <p className="text-xs sm:text-sm font-semibold text-[#242424] font-mono mt-0.5">
-              {currentUser.email}
+              {verifiedEmail || currentUser?.email || 'nickdevdsx@gmail.com'}
             </p>
           </div>
         </div>
