@@ -35,3 +35,25 @@ export interface ConsultationRequest {
   selectedPackage?: string;
   customDetails?: string;
 }
+
+export type PaymentStatus = 'Pending' | 'Partially Paid' | 'Fully Paid';
+export type ProjectStatus = 'Inquiry' | 'Confirmed' | 'In Progress' | 'Completed' | 'Cancelled';
+
+export interface Client {
+  id: string;
+  name: string;
+  companyName: string;
+  address: string;
+  phone: string;
+  email: string;
+  projectName: string;
+  fullPayment: number;
+  advancePayment: number;
+  remainingPayment: number;
+  paymentStatus: PaymentStatus;
+  projectStatus: ProjectStatus;
+  notes: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
