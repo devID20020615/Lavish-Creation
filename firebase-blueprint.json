@@ -1,0 +1,32 @@
+{
+  "entities": {
+    "Client": {
+      "title": "Client",
+      "description": "Client record with contact, project, and payment details",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "companyName": { "type": "string", "maxLength": 200 },
+        "address": { "type": "string", "maxLength": 500 },
+        "phone": { "type": "string", "maxLength": 50 },
+        "email": { "type": "string", "maxLength": 200 },
+        "projectName": { "type": "string", "minLength": 1, "maxLength": 200 },
+        "fullPayment": { "type": "number" },
+        "advancePayment": { "type": "number" },
+        "remainingPayment": { "type": "number" },
+        "paymentStatus": { "type": "string", "enum": ["Pending", "Partially Paid", "Fully Paid"] },
+        "projectStatus": { "type": "string", "enum": ["Inquiry", "Confirmed", "In Progress", "Completed", "Cancelled"] },
+        "notes": { "type": "string", "maxLength": 2000 },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["name", "projectName", "fullPayment", "advancePayment", "remainingPayment", "paymentStatus", "projectStatus"]
+    }
+  },
+  "firestore": {
+    "/clients/{clientId}": {
+      "schema": { "$ref": "#/entities/Client" },
+      "description": "Collection of client project management and payment tracking records"
+    }
+  }
+}
