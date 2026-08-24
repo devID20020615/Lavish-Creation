@@ -26,6 +26,31 @@ export interface DecorPackage {
   popular?: boolean;
 }
 
+export interface MenuItem {
+  id: string;
+  nameEn: string;
+  nameAs: string;
+  isVeg?: boolean;
+  popular?: boolean;
+  notes?: string;
+}
+
+export interface MenuSubSection {
+  id: string;
+  titleEn: string;
+  titleAs: string;
+  items: MenuItem[];
+}
+
+export interface MenuCategory {
+  id: string;
+  titleEn: string;
+  titleAs: string;
+  badgeEn?: string;
+  badgeAs?: string;
+  subSections: MenuSubSection[];
+}
+
 export interface ConsultationRequest {
   fullName: string;
   phone: string;

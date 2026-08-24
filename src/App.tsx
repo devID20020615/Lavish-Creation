@@ -4,11 +4,13 @@ import { Language, GalleryItem } from './types';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { GalleryShowcase } from './components/GalleryShowcase';
+import { BanquetMenu } from './components/BanquetMenu';
 import { VideoShowcase } from './components/VideoShowcase';
 import { Testimonials } from './components/Testimonials';
 import { Footer } from './components/Footer';
 import { AdminLoginModal } from './components/AdminLoginModal';
 import { AdminDashboard } from './components/AdminDashboard';
+import { InstagramBypassBanner } from './components/InstagramBypassBanner';
 import { ScrollToTop } from './components/ScrollToTop';
 import { GlobalLoader } from './components/GlobalLoader';
 import { isCMSAuthenticated } from './utils/storage';
@@ -70,6 +72,9 @@ export default function App() {
       {/* Global Top Progress & Status Loader */}
       <GlobalLoader />
 
+      {/* In-App Browser (Instagram/Facebook/TikTok) Bypass Alert & Breakout Banner */}
+      <InstagramBypassBanner lang={lang} />
+
       {/* Navigation Header */}
       <Navbar
         lang={lang}
@@ -104,6 +109,16 @@ export default function App() {
             lang={lang}
             onSelectSetupForInquiry={handleSelectGalleryItem}
           />
+        </motion.div>
+
+        {/* BB Events Reception Banquet Catering Menu Showcase */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-50px' }}
+          transition={{ duration: 0.7, ease: 'easeOut' }}
+        >
+          <BanquetMenu lang={lang} />
         </motion.div>
 
         {/* Venue Showcase Video Section (Placed above Client Testimonials) */}
