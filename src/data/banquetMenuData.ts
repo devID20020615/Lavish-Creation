@@ -1,0 +1,205 @@
+import { MenuCategory } from '../types';
+
+export const DEFAULT_BANQUET_MENU: MenuCategory[] = [
+  {
+    id: 'starters',
+    titleEn: 'BB EVENTS: STARTERS',
+    titleAs: 'বি বি ইভেন্টছ: স্টাৰ্টাৰ্চ',
+    badgeEn: 'Appetizers',
+    badgeAs: 'উৎকৃষ্ট আৰম্ভণি',
+    subSections: [
+      {
+        id: 'starters-main',
+        titleEn: 'Signature Starters',
+        titleAs: 'বিশেষ স্টাৰ্টাৰ ব্যঞ্জন',
+        items: [
+          { id: 'st-1', nameEn: 'French Fries', nameAs: 'ফ্ৰেন্স ফ্ৰাইজ', isVeg: true },
+          { id: 'st-2', nameEn: 'Chicken 65', nameAs: 'চিকেন ৬৫', isVeg: false, popular: true },
+          { id: 'st-3', nameEn: 'Chicken Popcorn', nameAs: 'চিকেন পপকৰ্ন', isVeg: false },
+          { id: 'st-4', nameEn: 'Mix Veg Pakora', nameAs: 'মিক্স ভেজ পকোৰা', isVeg: true },
+          { id: 'st-5', nameEn: 'Chilli Paneer (Capsicum)', nameAs: 'চিলি পনীৰ (কেপচিকাম)', isVeg: true, popular: true },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'main-course-veg',
+    titleEn: 'BB EVENTS: MAIN COURSE (Salads, Rice, Dal & Veg Sides)',
+    titleAs: 'বি বি ইভেন্টছ: মূল আহাৰ (সালাদ, ভাত, দাইল আৰু নিৰামিষ)',
+    badgeEn: 'Pure Delights',
+    badgeAs: 'সোৱাদপূৰ্ণ আহাৰ',
+    subSections: [
+      {
+        id: 'salads-chutneys',
+        titleEn: 'SALADS & CHUTNEYS',
+        titleAs: 'সালাদ আৰু চটনি',
+        items: [
+          { id: 'sc-1', nameEn: 'Green Salad', nameAs: 'গ্ৰীন সালাদ', isVeg: true },
+          { id: 'sc-2', nameEn: 'Fruit Salad', nameAs: 'ফ্ৰুট সালাদ', isVeg: true },
+          { id: 'sc-3', nameEn: 'Baked Beans', nameAs: 'বেক্ড বীনছ', isVeg: true },
+          { id: 'sc-4', nameEn: 'Green Chutney', nameAs: 'ধনিয়া সেউজীয়া চটনি', isVeg: true },
+          { id: 'sc-5', nameEn: 'Red Chutney (Schezwan)', nameAs: 'ৰঙা চেজৱান চটনি', isVeg: true },
+        ],
+      },
+      {
+        id: 'rice-items',
+        titleEn: 'RICE',
+        titleAs: 'চাউল আৰু পোলাও',
+        items: [
+          { id: 'rc-1', nameEn: 'Plain Rice', nameAs: 'সাধাৰণ ভাত', isVeg: true },
+          { id: 'rc-2', nameEn: 'Peas Pulao', nameAs: 'মটৰ পোলাও', isVeg: true },
+          { id: 'rc-3', nameEn: 'Veg Pulao', nameAs: 'ভেজ পোলাও', isVeg: true, popular: true },
+          { id: 'rc-4', nameEn: 'Jeera Rice', nameAs: 'জিৰা ৰাইচ', isVeg: true },
+        ],
+      },
+      {
+        id: 'dal-items',
+        titleEn: 'DAL',
+        titleAs: 'দাইল ব্যঞ্জন',
+        items: [
+          { id: 'dl-1', nameEn: 'Plain Dal', nameAs: 'সাধাৰণ দাইল', isVeg: true },
+          { id: 'dl-2', nameEn: 'Dal Tadka', nameAs: 'দাইল তৰকা', isVeg: true, popular: true },
+          { id: 'dl-3', nameEn: 'Dal Makhani', nameAs: 'দাইল মাখানি', isVeg: true, popular: true },
+          { id: 'dl-4', nameEn: 'Black Dal', nameAs: 'কালা দাইল', isVeg: true },
+        ],
+      },
+      {
+        id: 'veg-sides',
+        titleEn: 'VEGETARIAN SIDES',
+        titleAs: 'নিৰামিষ সজ্জা আৰু ব্যঞ্জন',
+        items: [
+          { id: 'vs-1', nameEn: 'Mix Veg', nameAs: 'মিক্স ভেজ', isVeg: true },
+          { id: 'vs-2', nameEn: 'Brinjal Fries', nameAs: 'বেঙেনা ভাজা', isVeg: true },
+          { id: 'vs-3', nameEn: 'Onion Pakora', nameAs: 'পিয়াজ পকোৰা', isVeg: true },
+          { id: 'vs-4', nameEn: 'Crispy Bhindi Fry', nameAs: 'ক্ৰিস্পী ভেন্দি ফ্ৰাই', isVeg: true, popular: true },
+          { id: 'vs-5', nameEn: 'Tomato Chutney (Tangy)', nameAs: 'টেঙা বিলাহী চটনি', isVeg: true },
+          { id: 'vs-6', nameEn: 'Masala Papad', nameAs: 'মছলা পাপৰ', isVeg: true },
+          { id: 'vs-7', nameEn: 'Fried Papad', nameAs: 'ভাজা পাপৰ', isVeg: true },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'non-veg-main',
+    titleEn: 'BB EVENTS: NON-VEGETARIAN MAIN COURSE',
+    titleAs: 'বি বি ইভেন্টছ: আমিশ মূল আহাৰ',
+    badgeEn: 'Royal Non-Veg Curation',
+    badgeAs: 'ৰাজকীয় আমীষ ভোজন',
+    subSections: [
+      {
+        id: 'fish-preparations',
+        titleEn: 'FISH',
+        titleAs: 'মাছৰ বিশেষ ব্যঞ্জন',
+        items: [
+          { id: 'fs-1', nameEn: 'Fish Finger', nameAs: 'ফিশ্ব ফিঙ্গাৰ', isVeg: false, popular: true },
+          { id: 'fs-2', nameEn: 'Fish Curry', nameAs: 'মাছৰ আঞ্জা', isVeg: false },
+          { id: 'fs-3', nameEn: 'Fish Sorshe', nameAs: 'সৰিয়হ মাছ (মাছৰ সৰিয়হ জোল)', isVeg: false, popular: true },
+          { id: 'fs-4', nameEn: 'Fish Tenga', nameAs: 'অসমীয়া মাছৰ টেঙা আঞ্জা', isVeg: false, popular: true },
+        ],
+      },
+      {
+        id: 'fish-options',
+        titleEn: 'FISH OPTIONS',
+        titleAs: 'মাছৰ উপলব্ধ জাত/বিকল্প',
+        items: [
+          { id: 'fo-1', nameEn: 'Katla', nameAs: 'কাটলা মাছ', isVeg: false },
+          { id: 'fo-2', nameEn: 'Rohu', nameAs: 'ৰৌ মাছ', isVeg: false },
+          { id: 'fo-3', nameEn: 'Borali', nameAs: 'বৰালি মাছ', isVeg: false, popular: true },
+          { id: 'fo-4', nameEn: 'Rupsanda', nameAs: 'ৰূপচন্দা মাছ', isVeg: false },
+          { id: 'fo-5', nameEn: 'Pangash', nameAs: 'পাঙ্গাশ মাছ', isVeg: false },
+          { id: 'fo-6', nameEn: 'Prawn (Misa Maas)', nameAs: 'মিছা মাছ (প্ৰন)', isVeg: false, popular: true },
+        ],
+      },
+      {
+        id: 'chicken-preparations',
+        titleEn: 'CHICKEN',
+        titleAs: 'কুকুৰা মাংসৰ আহাৰ',
+        items: [
+          { id: 'ch-1', nameEn: 'Chicken Dry Fry', nameAs: 'চিকেন ড্ৰাই ফ্ৰাই', isVeg: false },
+          { id: 'ch-2', nameEn: 'Chilli Chicken', nameAs: 'চিলি চিকেন', isVeg: false },
+          { id: 'ch-3', nameEn: 'Chicken Butter Masala', nameAs: 'চিকেন বাটাৰ মছলা', isVeg: false, popular: true },
+          { id: 'ch-4', nameEn: 'Chicken Kosha', nameAs: 'চিকেন কষা', isVeg: false, popular: true },
+          { id: 'ch-5', nameEn: 'Chicken Afghani', nameAs: 'চিকেন আফগানী', isVeg: false },
+          { id: 'ch-6', nameEn: 'Tandoori Chicken', nameAs: 'তন্দুৰী চিকেন', isVeg: false, popular: true },
+        ],
+      },
+      {
+        id: 'duck-preparations',
+        titleEn: 'DUCK',
+        titleAs: 'হাঁহৰ মাংসৰ বিশেষ আহাৰ',
+        items: [
+          { id: 'dk-1', nameEn: 'Duck with Kumura', nameAs: 'কোমোৰাৰে হাঁহৰ মাংস', isVeg: false, popular: true },
+          { id: 'dk-2', nameEn: 'Duck with Aloo Curry', nameAs: 'আলুৰে হাঁহৰ মাংসৰ জোল', isVeg: false },
+        ],
+      },
+      {
+        id: 'mutton-preparations',
+        titleEn: 'MUTTON',
+        titleAs: 'খাহী মাংসৰ বিশেষ আহাৰ',
+        items: [
+          { id: 'mt-1', nameEn: 'Mutton Curry', nameAs: 'খাহী মাংসৰ আঞ্জা', isVeg: false },
+          { id: 'mt-2', nameEn: 'Mutton Kosha', nameAs: 'খাহী মাংস কষা', isVeg: false, popular: true },
+          { id: 'mt-3', nameEn: 'Mutton Korma', nameAs: 'খাহী মাংস কোৰ্মা', isVeg: false, popular: true },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'veg-and-breads',
+    titleEn: 'BB EVENTS: VEGETARIAN & BREADS',
+    titleAs: 'বি বি ইভেন্টছ: নিৰামিষ আৰু ৰুটী',
+    badgeEn: 'Breads & Cottage Cheese',
+    badgeAs: 'বিশেষ ৰুটী আৰু পনীৰ',
+    subSections: [
+      {
+        id: 'indian-breads',
+        titleEn: 'INDIAN BREADS',
+        titleAs: 'ভাৰতীয় ৰুটী আৰু নাআন',
+        items: [
+          { id: 'ib-1', nameEn: 'Plain Roti', nameAs: 'সাধাৰণ ৰুটী', isVeg: true },
+          { id: 'ib-2', nameEn: 'Butter Roti', nameAs: 'বাটাৰ ৰুটী', isVeg: true },
+          { id: 'ib-3', nameEn: 'Rumali Roti', nameAs: 'ৰুমালী ৰুটী', isVeg: true, popular: true },
+          { id: 'ib-4', nameEn: 'Plain Naan', nameAs: 'সাধাৰণ নাআন', isVeg: true },
+          { id: 'ib-5', nameEn: 'Butter Naan', nameAs: 'বাটাৰ নাআন', isVeg: true, popular: true },
+          { id: 'ib-6', nameEn: 'Aloo Paratha', nameAs: 'আলু পৰঠা', isVeg: true },
+          { id: 'ib-7', nameEn: 'Plain Paratha', nameAs: 'সাধাৰণ পৰঠা', isVeg: true },
+          { id: 'ib-8', nameEn: 'Dal Paratha', nameAs: 'দাইল পৰঠা', isVeg: true },
+        ],
+      },
+      {
+        id: 'paneer-dishes',
+        titleEn: 'PANEER',
+        titleAs: 'পনীৰৰ সুস্বাদু ব্যঞ্জন',
+        items: [
+          { id: 'pn-1', nameEn: 'Paneer Pakora', nameAs: 'পনীৰ পকোৰা', isVeg: true },
+          { id: 'pn-2', nameEn: 'Paneer Mix Veg', nameAs: 'পনীৰ মিক্স ভেজ', isVeg: true },
+          { id: 'pn-3', nameEn: 'Paneer Butter Masala', nameAs: 'পনীৰ বাটাৰ মছলা', isVeg: true, popular: true },
+          { id: 'pn-4', nameEn: 'Paneer Aloo Matar Curry', nameAs: 'পনীৰ আলু মটৰ আঞ্জা', isVeg: true },
+          { id: 'pn-5', nameEn: 'Chilli Paneer', nameAs: 'চিলি পনীৰ', isVeg: true },
+          { id: 'pn-6', nameEn: 'Paneer Manchurian', nameAs: 'পনীৰ মাঞ্চুৰিয়ান', isVeg: true },
+          { id: 'pn-7', nameEn: 'Shahi Paneer', nameAs: 'শ্বাহী পনীৰ', isVeg: true, popular: true },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'assamese-classics',
+    titleEn: 'BB EVENTS: ASSAMESE CLASSICS',
+    titleAs: 'বি বি ইভেন্টছ: পৰম্পৰাগত অসমীয়া আহাৰ',
+    badgeEn: 'Authentic Heritage',
+    badgeAs: 'খাটি অসমীয়া সোৱাদ',
+    subSections: [
+      {
+        id: 'assamese-heritage',
+        titleEn: 'Heritage Delicacies',
+        titleAs: 'অসমীয়া ঐতিহ্যমণ্ডিত আহাৰ',
+        items: [
+          { id: 'ac-1', nameEn: 'Aloo Pitika', nameAs: 'আলু পিটিকা', isVeg: true, popular: true },
+          { id: 'ac-2', nameEn: 'Khar', nameAs: 'অসমীয়া খাৰ', isVeg: true, popular: true },
+          { id: 'ac-3', nameEn: 'Muri Ghanta', nameAs: 'মাছৰ মূৰৰ মূৰী ঘণ্টা', isVeg: false, popular: true },
+          { id: 'ac-4', nameEn: 'Til Bata (Chutney)', nameAs: 'তিল বটা চটনি', isVeg: true, popular: true },
+        ],
+      },
+    ],
+  },
+];
