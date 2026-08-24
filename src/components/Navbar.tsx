@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Language } from '../types';
 import { JaapiMotif } from './motifs/JaapiMotif';
 import { Menu, X, Phone, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { getStoredSettings, subscribeStorage, AdminContactSettings } from '../utils/storage';
 
 interface NavbarProps {
   lang: Language;
@@ -17,9 +18,17 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenConsultation,
   onOpenAdmin,
 }) => {
+  const [settings, setSettings] = useState<AdminContactSettings>(() => getStoredSettings());
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const lastTapRef = useRef(0);
   const isAssamese = lang === 'as';
+
+  useEffect(() => {
+    const unsubscribe = subscribeStorage(() => {
+      setSettings(getStoredSettings());
+    });
+    return unsubscribe;
+  }, []);
 
   const handleLogoTouchEnd = (e: React.TouchEvent) => {
     const now = Date.now();
@@ -32,6 +41,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   const navLinks = [
     { href: '#gallery', labelAs: 'গ্যালৰী', labelEn: 'Gallery' },
+    { href: '#banquet-menu', labelAs: 'কেটাৰিং মেনু', labelEn: 'Banquet Menu' },
     { href: '#stories', labelAs: 'গল্প', labelEn: 'Testimonials' },
     { href: '#footer', labelAs: 'যোগাযোগ', labelEn: 'Contact' },
   ];
@@ -47,14 +57,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div
             onDoubleClick={onOpenAdmin}
             onTouchEnd={handleLogoTouchEnd}
-            title="BB Decoration Logo"
-            className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-[#F7F2EA] border border-[#D8C2A3]/70 shadow-2xs shrink-0 flex items-center justify-center overflow-hidden relative cursor-pointer select-none"
+            title="BB Decoration Logo (Double-click to open CMS Portal)"
+            className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl border border-[#D8C2A3]/80 shadow-2xs shrink-0 flex items-center justify-center overflow-hidden relative cursor-pointer select-none bg-[#5A0F12]"
           >
             <img
-              src="https://i.ibb.co/ds07wJms/Chat-GPT-Image-Jul-28-2026-10-32-13-PM.png"
+              key={settings.logoUrl}
+              src={settings.logoUrl || "https://i.ibb.co/ds07wJms/Chat-GPT-Image-Jul-28-2026-10-32-13-PM.png"}
               alt="BB Decoration Logo"
               referrerPolicy="no-referrer"
-              className="w-full h-full object-cover scale-125 translate-y-[2px]"
+              className="w-full h-full object-cover object-center"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = "https://i.ibb.co/ds07wJms/Chat-GPT-Image-Jul-28-2026-10-32-13-PM.png";
+              }}
             />
           </div>
           <div className="flex flex-col justify-center -space-y-0.5">
@@ -70,6 +84,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </span>
           </div>
         </div>
+
 
         {/* Desktop Navigation Links */}
         <nav className="hidden md:flex items-center gap-6 lg:gap-10">

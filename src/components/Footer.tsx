@@ -46,14 +46,18 @@ export const Footer: React.FC<FooterProps> = ({ lang, onOpenConsultation, onOpen
               <div
                 onDoubleClick={onOpenAdmin}
                 onTouchEnd={handleLogoTouchEnd}
-                title="BB Decoration Logo"
-                className="w-12 h-12 rounded-xl bg-[#242424] border border-[#D4B16A]/40 flex items-center justify-center overflow-hidden shrink-0 shadow-md cursor-pointer select-none"
+                title="BB Decoration Logo (Double-click to open CMS Portal)"
+                className="w-12 h-12 rounded-xl border border-[#D4B16A]/60 flex items-center justify-center overflow-hidden shrink-0 shadow-md cursor-pointer select-none bg-[#5A0F12]"
               >
                 <img
-                  src="https://i.ibb.co/ds07wJms/Chat-GPT-Image-Jul-28-2026-10-32-13-PM.png"
+                  key={settings.logoUrl}
+                  src={settings.logoUrl || "https://i.ibb.co/ds07wJms/Chat-GPT-Image-Jul-28-2026-10-32-13-PM.png"}
                   alt="BB Decoration Logo"
                   referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover scale-125 translate-y-[3px]"
+                  className="w-full h-full object-cover object-center"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = "https://i.ibb.co/ds07wJms/Chat-GPT-Image-Jul-28-2026-10-32-13-PM.png";
+                  }}
                 />
               </div>
               <div className="flex flex-col justify-center">

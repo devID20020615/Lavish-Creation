@@ -3,10 +3,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
   X, Plus, Trash2, Edit3, Save, RefreshCw, LogOut, Image, MessageSquare,
   PhoneCall, ShieldAlert, Check, Search, Filter, Sparkles, Layers, Tag, Layout, Eye, EyeOff,
-  Wand2, Loader2, Link2, Instagram, Video, Play, ChevronDown, ChevronUp, Users
+  Wand2, Loader2, Link2, Instagram, Video, Play, ChevronDown, ChevronUp, Users, ChefHat, Utensils,
+  Upload, RotateCcw, FileImage, ImagePlus, Key, CheckCircle2, AlertCircle, ExternalLink, CloudUpload
 } from 'lucide-react';
 import { ClientManagement } from './ClientManagement';
-import { GalleryItem } from '../types';
+import { InstagramBypassHub } from './InstagramBypassHub';
+import { GalleryItem, MenuCategory, MenuItem } from '../types';
 import {
   subscribeStorage,
   getStoredGalleryItems,
@@ -20,6 +22,7 @@ import {
   deleteTestimonial,
   getStoredSettings,
   saveSettings,
+  uploadImageToImgbb,
   getStoredHeroSlides,
   addHeroSlide,
   updateHeroSlide,
@@ -31,7 +34,10 @@ import {
   addVideoItem,
   updateVideoItem,
   deleteVideoItem,
+
   toggleVideoItemEnabled,
+  getStoredBanquetMenu,
+  saveBanquetMenu,
   resetStorageToDefault,
   setCMSAuthenticated,
   TestimonialItem,
@@ -48,7 +54,7 @@ interface AdminDashboardProps {
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'gallery' | 'hero' | 'videos' | 'testimonials' | 'settings' | 'clients'>('gallery');
+  const [activeTab, setActiveTab] = useState<'gallery' | 'hero' | 'videos' | 'testimonials' | 'banquet' | 'settings' | 'clients' | 'instagram_bypass'>('gallery');
   const [isTabDropdownOpen, setIsTabDropdownOpen] = useState(false);
   const tabDropdownRef = React.useRef<HTMLDivElement>(null);
 
@@ -542,6 +548,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
   // Settings State
   const [settings, setSettings] = useState<AdminContactSettings>(() => getStoredSettings());
   const [saveSuccessMsg, setSaveSuccessMsg] = useState('');
+  const [logoSuccessMsg, setLogoSuccessMsg] = useState('');
+  const [isResolvingLogoUrl, setIsResolvingLogoUrl] = useState(false);
+  const [isUploadingLogoToImgbb, setIsUploadingLogoToImgbb] = useState(false);
+  const [isTestingImgbbKey, setIsTestingImgbbKey] = useState(false);
+  const [imgbbTestStatus, setImgbbTestStatus] = useState<{ type: 'success' | 'error' | ''; message: string }>({
+    type: '',
+    message: '',
+  });
+  const logoFileRef = React.useRef<HTMLInputElement>(null);
+  const galleryImgbbFileRef = React.useRef<HTMLInputElement>(null);
+  const heroSlideImgbbFileRef = React.useRef<HTMLInputElement>(null);
+  const [isUploadingGalleryImgbb, setIsUploadingGalleryImgbb] = useState(false);
+  const [isUploadingHeroImgbb, setIsUploadingHeroImgbb] = useState(false);
+
 
   // Venue Videos State
   const [videos, setVideos] = useState<VideoItem[]>(() => getStoredVideos());
@@ -598,6 +618,149 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
     refreshAll();
   };
 
+  // Banquet Menu State & Dish Modal
+  const [banquetCategories, setBanquetCategories] = useState<MenuCategory[]>(() => getStoredBanquetMenu());
+  const [editingDishTarget, setEditingDishTarget] = useState<{
+    catId: string;
+    subId: string;
+    dish?: MenuItem;
+  } | null>(null);
+  const [isDishModalOpen, setIsDishModalOpen] = useState(false);
+  const [dishNameEn, setDishNameEn] = useState('');
+  const [dishNameAs, setDishNameAs] = useState('');
+  const [dishIsVeg, setDishIsVeg] = useState(true);
+  const [dishPopular, setDishPopular] = useState(false);
+
+  const handleOpenAddDish = (catId: string, subId: string) => {
+    setEditingDishTarget({ catId, subId });
+    setDishNameEn('');
+    setDishNameAs('');
+    setDishIsVeg(true);
+    setDishPopular(false);
+    setIsDishModalOpen(true);
+  };
+
+  const handleOpenEditDish = (catId: string, subId: string, dish: MenuItem) => {
+    setEditingDishTarget({ catId, subId, dish });
+    setDishNameEn(dish.nameEn);
+    setDishNameAs(dish.nameAs);
+    setDishIsVeg(dish.isVeg !== false);
+    setDishPopular(!!dish.popular);
+    setIsDishModalOpen(true);
+  };
+
+  const handleSaveDish = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDishTarget || !dishNameEn.trim()) return;
+
+    const updatedCategories = banquetCategories.map((cat) => {
+      if (cat.id !== editingDishTarget.catId) return cat;
+      return {
+        ...cat,
+        subSections: cat.subSections.map((sub) => {
+          if (sub.id !== editingDishTarget.subId) return sub;
+
+          if (editingDishTarget.dish) {
+            // Edit existing item
+            return {
+              ...sub,
+              items: sub.items.map((item) =>
+                item.id === editingDishTarget.dish!.id
+                  ? {
+                      ...item,
+                      nameEn: dishNameEn.trim(),
+                      nameAs: dishNameAs.trim() || dishNameEn.trim(),
+                      isVeg: dishIsVeg,
+                      popular: dishPopular,
+                    }
+                  : item
+              ),
+            };
+          } else {
+            // Add new item
+            const newDish: MenuItem = {
+              id: 'dish_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+              nameEn: dishNameEn.trim(),
+              nameAs: dishNameAs.trim() || dishNameEn.trim(),
+              isVeg: dishIsVeg,
+              popular: dishPopular,
+            };
+            return {
+              ...sub,
+              items: [...sub.items, newDish],
+            };
+          }
+        }),
+      };
+    });
+
+    saveBanquetMenu(updatedCategories);
+    setBanquetCategories(updatedCategories);
+    setIsDishModalOpen(false);
+    setEditingDishTarget(null);
+  };
+
+  const handleDeleteDish = (catId: string, subId: string, dishId: string) => {
+    const updatedCategories = banquetCategories.map((cat) => {
+      if (cat.id !== catId) return cat;
+      return {
+        ...cat,
+        subSections: cat.subSections.map((sub) => {
+          if (sub.id !== subId) return sub;
+          return {
+            ...sub,
+            items: sub.items.filter((item) => item.id !== dishId),
+          };
+        }),
+      };
+    });
+
+    saveBanquetMenu(updatedCategories);
+    setBanquetCategories(updatedCategories);
+  };
+
+  const handleToggleDishVeg = (catId: string, subId: string, dishId: string) => {
+    const updatedCategories = banquetCategories.map((cat) => {
+      if (cat.id !== catId) return cat;
+      return {
+        ...cat,
+        subSections: cat.subSections.map((sub) => {
+          if (sub.id !== subId) return sub;
+          return {
+            ...sub,
+            items: sub.items.map((item) =>
+              item.id === dishId ? { ...item, isVeg: !item.isVeg } : item
+            ),
+          };
+        }),
+      };
+    });
+
+    saveBanquetMenu(updatedCategories);
+    setBanquetCategories(updatedCategories);
+  };
+
+  const handleToggleDishPopular = (catId: string, subId: string, dishId: string) => {
+    const updatedCategories = banquetCategories.map((cat) => {
+      if (cat.id !== catId) return cat;
+      return {
+        ...cat,
+        subSections: cat.subSections.map((sub) => {
+          if (sub.id !== subId) return sub;
+          return {
+            ...sub,
+            items: sub.items.map((item) =>
+              item.id === dishId ? { ...item, popular: !item.popular } : item
+            ),
+          };
+        }),
+      };
+    });
+
+    saveBanquetMenu(updatedCategories);
+    setBanquetCategories(updatedCategories);
+  };
+
   // Refresh items from storage
   const refreshAll = () => {
     setGalleryItems(getStoredGalleryItems());
@@ -606,6 +769,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
     setHeroSlides(getStoredHeroSlides());
     setHeroConfig(getStoredHeroConfig());
     setVideos(getStoredVideos());
+    setBanquetCategories(getStoredBanquetMenu());
   };
 
   useEffect(() => {
@@ -799,6 +963,197 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
     refreshAll();
   };
 
+  const DEFAULT_BRAND_LOGO = 'https://i.ibb.co/ds07wJms/Chat-GPT-Image-Jul-28-2026-10-32-13-PM.png';
+
+  const handleLogoUrlChange = (val: string) => {
+    const clean = clientExtractDirectUrl(val.trim());
+    setSettings((prev) => ({ ...prev, logoUrl: clean }));
+  };
+
+  const handleResolveLogoUrl = async () => {
+    const currentUrl = settings.logoUrl || '';
+    if (!currentUrl) return;
+    if (isIbbViewerPageUrl(currentUrl)) {
+      setIsResolvingLogoUrl(true);
+      try {
+        const resolved = await resolveImageUrl(currentUrl);
+        if (resolved) {
+          setSettings((prev) => ({ ...prev, logoUrl: resolved }));
+        }
+      } catch (err) {
+        console.warn('Error resolving logo url:', err);
+      } finally {
+        setIsResolvingLogoUrl(false);
+      }
+    }
+  };
+
+  const handleTestImgbbKey = async () => {
+    const key = (settings.imgbbApiKey || '').trim();
+    if (!key) {
+      setImgbbTestStatus({
+        type: 'error',
+        message: 'Please enter an ImgBB API key first.',
+      });
+      return;
+    }
+
+    setIsTestingImgbbKey(true);
+    setImgbbTestStatus({ type: '', message: '' });
+
+    try {
+      // Create a valid 10x10 PNG image via standard HTML canvas to test ImgBB API
+      const canvas = document.createElement('canvas');
+      canvas.width = 10;
+      canvas.height = 10;
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.fillStyle = '#8C1D18';
+        ctx.fillRect(0, 0, 10, 10);
+      }
+      const testImageData = canvas.toDataURL('image/png');
+
+      const result = await uploadImageToImgbb(testImageData, key, 'bb_decoration_connection_test');
+      if (result.success && result.url) {
+        setImgbbTestStatus({
+          type: 'success',
+          message: '✓ ImgBB API Key verified & connected successfully! Direct cloud uploads are ready.',
+        });
+        // Auto-save the valid settings
+        saveSettings(settings);
+      } else {
+        setImgbbTestStatus({
+          type: 'error',
+          message: result.error || 'Failed to verify key. Please check your ImgBB API key.',
+        });
+      }
+    } catch (err: any) {
+      setImgbbTestStatus({
+        type: 'error',
+        message: err?.message || 'Error communicating with ImgBB API.',
+      });
+    } finally {
+      setIsTestingImgbbKey(false);
+    }
+  };
+
+  const handleLogoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert('The chosen image file is too large. Please select a logo file under 10MB.');
+      return;
+    }
+
+    setIsUploadingLogoToImgbb(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        // Try uploading to ImgBB first if key exists
+        const key = (settings.imgbbApiKey || '').trim();
+        if (key) {
+          try {
+            const uploadResult = await uploadImageToImgbb(dataUrl, key, 'bb_decoration_logo_' + Date.now());
+            if (uploadResult.success && uploadResult.url) {
+              const updated = { ...settings, logoUrl: uploadResult.url };
+              setSettings(updated);
+              saveSettings(updated);
+              setLogoSuccessMsg('✓ Logo uploaded directly to ImgBB CDN and updated live across the website!');
+              setTimeout(() => setLogoSuccessMsg(''), 4000);
+              refreshAll();
+              setIsUploadingLogoToImgbb(false);
+              return;
+            }
+          } catch (err) {
+            console.warn('ImgBB upload fallback to direct dataUrl:', err);
+          }
+        }
+
+        // Fallback: save as direct dataUrl
+        const updated = { ...settings, logoUrl: dataUrl };
+        setSettings(updated);
+        saveSettings(updated);
+        setLogoSuccessMsg('✓ Logo updated and applied live across the website!');
+        setTimeout(() => setLogoSuccessMsg(''), 3500);
+        refreshAll();
+        setIsUploadingLogoToImgbb(false);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleResetLogo = () => {
+    if (window.confirm('Reset main logo to the original BB Decoration logo?')) {
+      const updated = { ...settings, logoUrl: DEFAULT_BRAND_LOGO };
+      setSettings(updated);
+      saveSettings(updated);
+      setLogoSuccessMsg('✓ Logo reset to default successfully!');
+      setTimeout(() => setLogoSuccessMsg(''), 3000);
+      refreshAll();
+    }
+  };
+
+  const handleSaveLogoDirectly = () => {
+    saveSettings(settings);
+    setLogoSuccessMsg('✓ Main logo updated & applied across the website!');
+    setTimeout(() => setLogoSuccessMsg(''), 3000);
+    refreshAll();
+  };
+
+  // Direct Gallery Upload to ImgBB
+  const handleGalleryImgbbUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingGalleryImgbb(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        const key = (settings.imgbbApiKey || '').trim();
+        const uploadResult = await uploadImageToImgbb(dataUrl, key, 'gallery_item_' + Date.now());
+        if (uploadResult.success && uploadResult.url) {
+          handleGalleryImageUrlInput(uploadResult.url, false);
+          setAiStatusMessage('✓ Photo uploaded directly to ImgBB! Analyzing with Gemini AI...');
+          // Trigger AI auto-naming
+          triggerGeminiGalleryAnalysis(uploadResult.url);
+        } else {
+          alert('ImgBB upload error: ' + (uploadResult.error || 'Please check your ImgBB API key.'));
+        }
+      }
+      setIsUploadingGalleryImgbb(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Direct Hero Slide Upload to ImgBB
+  const handleHeroImgbbUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingHeroImgbb(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const dataUrl = event.target?.result as string;
+      if (dataUrl) {
+        const key = (settings.imgbbApiKey || '').trim();
+        const uploadResult = await uploadImageToImgbb(dataUrl, key, 'hero_slide_' + Date.now());
+        if (uploadResult.success && uploadResult.url) {
+          handleHeroSlideImageUrlInput(uploadResult.url, false);
+          setAiStatusMessage('✓ Hero photo uploaded directly to ImgBB! Generating headlines...');
+          // Trigger AI auto-generation
+          triggerGeminiHeroSlideAnalysis(uploadResult.url);
+        } else {
+          alert('ImgBB upload error: ' + (uploadResult.error || 'Please check your ImgBB API key.'));
+        }
+      }
+      setIsUploadingHeroImgbb(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
   // Settings Save
   const handleSaveSettingsForm = (e: React.FormEvent) => {
     e.preventDefault();
@@ -866,6 +1221,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button
+              onClick={onClose}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#D4B16A]/20 hover:bg-[#D4B16A]/30 text-[#D4B16A] border border-[#D4B16A]/40 text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
+              title="View live website preview with updated changes"
+            >
+              <Eye className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">View Website Preview</span>
+            </button>
+
+            <button
               onClick={handleReset}
               className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-950/60 hover:bg-red-900 text-red-200 border border-red-800/50 text-xs font-semibold cursor-pointer transition-colors"
               title="Reset data to default"
@@ -927,16 +1291,29 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
               subtitle: 'Client stories & feedback'
             },
             {
+              id: 'banquet' as const,
+              label: 'Banquet Catering Menu',
+              count: banquetCategories.reduce((acc, c) => acc + c.subSections.reduce((sAcc, s) => sAcc + s.items.length, 0), 0),
+              icon: ChefHat,
+              subtitle: 'Starters, main course, non-veg, breads & Assamese items'
+            },
+            {
               id: 'settings' as const,
-              label: 'WhatsApp & Contact',
+              label: 'Brand Logo & Settings',
               icon: PhoneCall,
-              subtitle: 'Phone numbers, address & Instagram'
+              subtitle: 'Change main logo, WhatsApp, address & contact'
             },
             {
               id: 'clients' as const,
               label: 'Clients',
               icon: Users,
               subtitle: 'Client CRM, billing, payments & project tracking'
+            },
+            {
+              id: 'instagram_bypass' as const,
+              label: 'Instagram & In-App Bypass',
+              icon: Instagram,
+              subtitle: 'Direct download trigger, deep links & bio generator'
             }
           ];
 
@@ -1732,103 +2109,517 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
             </div>
           )}
 
-          {/* ================= TAB 3: CONTACT & WHATSAPP SETTINGS ================= */}
+          {/* ================= TAB 3: BRAND LOGO & SETTINGS ================= */}
           {activeTab === 'settings' && (
-            <div className="max-w-2xl mx-auto bg-white p-4 sm:p-8 rounded-2xl sm:rounded-3xl border border-[#D8C2A3] shadow-sm min-w-0">
-              <h3 className="text-lg sm:text-xl font-bold font-serif-playfair text-[#242424] mb-1 sm:mb-2">
-                WhatsApp & Direct Contact Settings
-              </h3>
-              <p className="text-xs text-[#3A2F28]/70 mb-4 sm:mb-6">
-                Update the target admin WhatsApp phone number where inquiry messages are redirected
-              </p>
-
-              {saveSuccessMsg && (
-                <div className="p-3 mb-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2">
-                  <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{saveSuccessMsg}</span>
-                </div>
-              )}
-
-              <form onSubmit={handleSaveSettingsForm} className="space-y-4 min-w-0">
-                <div>
-                  <label className="block text-xs font-bold text-[#3A2F28] uppercase tracking-wider mb-1">
-                    Target Admin WhatsApp Number (Numeric string with country code)
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={settings.adminWhatsApp}
-                    onChange={(e) => setSettings({ ...settings, adminWhatsApp: e.target.value })}
-                    placeholder="e.g. 916002483363"
-                    className="w-full px-4 py-2.5 bg-[#F7F2EA] border border-[#D8C2A3] rounded-xl text-sm font-mono font-bold text-[#8C1D18] min-w-0"
-                  />
-                  <span className="text-[11px] text-[#3A2F28]/60 mt-1 block">
-                    All "Inquire Now" and setup inquiry clicks will automatically open WhatsApp with this phone number.
+            <div className="max-w-3xl mx-auto space-y-6 min-w-0">
+              {/* CARD 1: MAIN BRAND LOGO & VISUAL IDENTITY */}
+              <div className="bg-white p-4 sm:p-7 rounded-2xl sm:rounded-3xl border border-[#D8C2A3] shadow-sm min-w-0 space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#F2ECE1] pb-4">
+                  <div>
+                    <h3 className="text-lg sm:text-xl font-bold font-serif-playfair text-[#242424] flex items-center gap-2">
+                      <ImagePlus className="w-5 h-5 text-[#8C1D18]" />
+                      <span>Main Brand Logo & Visual Identity</span>
+                    </h3>
+                    <p className="text-xs text-[#5A4F43] mt-0.5">
+                      Upload or enter a link to change the official logo displayed on the Header Navbar, Mobile Drawer, and Footer in real-time.
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-bold px-3 py-1 rounded-full bg-[#D4B16A]/20 text-[#8C1D18] border border-[#D4B16A]/40 w-fit shrink-0">
+                    Live System Logo
                   </span>
                 </div>
 
+                {logoSuccessMsg && (
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-2xs">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{logoSuccessMsg}</span>
+                  </div>
+                )}
+
+                {/* Dual Live Preview Display */}
                 <div>
-                  <label className="block text-xs font-bold text-[#3A2F28] uppercase tracking-wider mb-1">
-                    Display Phone Number
+                  <label className="block text-xs font-bold text-[#3A2F28] uppercase tracking-wider mb-2.5">
+                    Real-time Logo Preview (Navbar Header & Footer Centered View)
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={settings.phoneDisplay}
-                    onChange={(e) => setSettings({ ...settings, phoneDisplay: e.target.value })}
-                    className="w-full px-4 py-2 bg-[#F7F2EA] border border-[#D8C2A3] rounded-xl text-sm font-medium min-w-0"
-                  />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                    {/* Light Header Mockup */}
+                    <div className="bg-[#FAF8F5] border border-[#D8C2A3] rounded-2xl p-4 flex items-center gap-3 shadow-2xs">
+                      <div className="w-12 h-12 rounded-xl border border-[#D8C2A3]/80 shadow-2xs shrink-0 flex items-center justify-center overflow-hidden relative bg-[#5A0F12]">
+                        <img
+                          key={`light-${settings.logoUrl}`}
+                          src={settings.logoUrl || DEFAULT_BRAND_LOGO}
+                          alt="Logo Preview Light"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover object-center"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = DEFAULT_BRAND_LOGO;
+                          }}
+                        />
+                      </div>
+                      <div className="flex flex-col justify-center min-w-0">
+                        <span className="text-xs font-bold text-[#8C1D18] uppercase tracking-wider text-[10px]">
+                          Header Preview (Light)
+                        </span>
+                        <span className="text-sm font-bold text-[#242424] truncate">
+                          BB Decoration
+                        </span>
+                        <span className="text-[10px] text-[#8C1D18] font-semibold uppercase">
+                          By Lavish Creation
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Dark Footer Mockup */}
+                    <div className="bg-[#242424] border border-[#D4B16A]/40 rounded-2xl p-4 flex items-center gap-3 shadow-2xs">
+                      <div className="w-12 h-12 rounded-xl border border-[#D4B16A]/60 flex items-center justify-center overflow-hidden shrink-0 shadow-md bg-[#5A0F12]">
+                        <img
+                          key={`dark-${settings.logoUrl}`}
+                          src={settings.logoUrl || DEFAULT_BRAND_LOGO}
+                          alt="Logo Preview Dark"
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover object-center"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = DEFAULT_BRAND_LOGO;
+                          }}
+                        />
+                      </div>
+                      <div className="flex flex-col justify-center min-w-0">
+                        <span className="text-xs font-bold text-[#D4B16A] uppercase tracking-wider text-[10px]">
+                          Footer Preview (Dark)
+                        </span>
+                        <span className="text-sm font-bold text-[#FAF8F5] truncate">
+                          BB Decoration
+                        </span>
+                        <span className="text-[10px] text-[#D4B16A] font-semibold uppercase">
+                          By Lavish Creation
+                        </span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-[#3A2F28] uppercase tracking-wider mb-1">
-                    Contact Email Address
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={settings.email}
-                    onChange={(e) => setSettings({ ...settings, email: e.target.value })}
-                    className="w-full px-4 py-2 bg-[#F7F2EA] border border-[#D8C2A3] rounded-xl text-sm font-medium min-w-0"
-                  />
+                {/* Upload & URL Input Controls */}
+                <div className="space-y-4 pt-2">
+                  {/* File Upload Button (Hidden File Input) */}
+                  <div>
+                    <label className="block text-xs font-bold text-[#3A2F28] uppercase tracking-wider mb-1.5">
+                      Option A: Direct Logo Upload (Auto-Uploads to ImgBB CDN)
+                    </label>
+                    <input
+                      type="file"
+                      ref={logoFileRef}
+                      onChange={handleLogoFileUpload}
+                      accept="image/png,image/jpeg,image/svg+xml,image/webp,image/gif"
+                      className="hidden"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={isUploadingLogoToImgbb}
+                        onClick={() => logoFileRef.current?.click()}
+                        className="px-4 py-2.5 rounded-xl bg-[#8C1D18] hover:bg-[#5A0F12] text-white text-xs sm:text-sm font-semibold flex items-center gap-2 shadow-sm cursor-pointer transition-colors disabled:opacity-60"
+                      >
+                        {isUploadingLogoToImgbb ? (
+                          <Loader2 className="w-4 h-4 text-[#D4B16A] animate-spin" />
+                        ) : (
+                          <CloudUpload className="w-4 h-4 text-[#D4B16A]" />
+                        )}
+                        <span>{isUploadingLogoToImgbb ? 'Uploading to ImgBB...' : 'Upload New Logo File'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleResetLogo}
+                        className="px-3.5 py-2.5 rounded-xl bg-[#F7F2EA] hover:bg-[#EAE1D2] text-[#3A2F28] text-xs sm:text-sm font-semibold flex items-center gap-1.5 border border-[#D8C2A3] cursor-pointer transition-colors"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-[#8C1D18]" />
+                        <span>Reset to Default Logo</span>
+                      </button>
+                    </div>
+                    <p className="text-[11px] text-[#7A6A5C] mt-1.5">
+                      {settings.imgbbApiKey ? (
+                        <span className="text-emerald-700 font-semibold">✓ Connected to your ImgBB account. Logo files upload directly to ImgBB CDN.</span>
+                      ) : (
+                        <span>Tip: Connect your free ImgBB API key below for instant direct CDN hosting, or upload standard PNG/SVG.</span>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Direct Image URL Input */}
+                  <div>
+                    <label className="block text-xs font-bold text-[#3A2F28] uppercase tracking-wider mb-1.5">
+                      Option B: Paste Direct Logo URL (ImgBB, Cloudinary, CDN)
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="relative flex-1 min-w-0">
+                        <Link2 className="w-4 h-4 text-[#B68C4A] absolute left-3 top-1/2 -translate-y-1/2 shrink-0" />
+                        <input
+                          type="text"
+                          value={settings.logoUrl || ''}
+                          onChange={(e) => handleLogoUrlChange(e.target.value)}
+                          placeholder="https://i.ibb.co/... or https://..."
+                          className="w-full pl-9 pr-4 py-2.5 bg-[#F7F2EA] border border-[#D8C2A3] rounded-xl text-xs sm:text-sm font-mono text-[#242424] min-w-0"
+                        />
+                      </div>
+
+                      {isIbbViewerPageUrl(settings.logoUrl || '') && (
+                        <button
+                          type="button"
+                          onClick={handleResolveLogoUrl}
+                          disabled={isResolvingLogoUrl}
+                          className="px-3 py-2 bg-[#D4B16A]/20 hover:bg-[#D4B16A]/30 text-[#8C1D18] border border-[#D4B16A]/50 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                        >
+                          {isResolvingLogoUrl ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Wand2 className="w-3.5 h-3.5" />
+                          )}
+                          <span>Resolve ImgBB</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={handleSaveLogoDirectly}
+                        className="px-4 py-2 bg-[#8C1D18] hover:bg-[#5A0F12] text-white rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5 text-[#D4B16A]" />
+                        <span>Apply & Save Logo</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 2: IMGBB CLOUD API KEY INTEGRATION */}
+              <div className="bg-white p-4 sm:p-7 rounded-2xl sm:rounded-3xl border-2 border-[#D4B16A]/60 shadow-sm min-w-0 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#F2ECE1] pb-3.5">
+                  <div>
+                    <h3 className="text-lg sm:text-xl font-bold font-serif-playfair text-[#242424] flex items-center gap-2">
+                      <Key className="w-5 h-5 text-[#8C1D18]" />
+                      <span>ImgBB Direct Cloud Upload Integration</span>
+                    </h3>
+                    <p className="text-xs text-[#5A4F43] mt-0.5">
+                      Connect your ImgBB API key to upload brand logos, hero slides, and gallery photos directly to ImgBB CDN from this CMS.
+                    </p>
+                  </div>
+                  <span className={`text-[11px] font-bold px-3 py-1 rounded-full border w-fit shrink-0 ${
+                    settings.imgbbApiKey
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                      : 'bg-amber-50 text-amber-800 border-amber-300'
+                  }`}>
+                    {settings.imgbbApiKey ? '✓ ImgBB Connected' : 'API Key Optional'}
+                  </span>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-[#3A2F28] uppercase tracking-wider mb-1">
-                    Guwahati Office Address
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={settings.guwahatiAddress}
-                    onChange={(e) => setSettings({ ...settings, guwahatiAddress: e.target.value })}
-                    className="w-full px-4 py-2 bg-[#F7F2EA] border border-[#D8C2A3] rounded-xl text-sm font-medium min-w-0"
-                  />
+                {imgbbTestStatus.message && (
+                  <div className={`p-3 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-2xs ${
+                    imgbbTestStatus.type === 'success'
+                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-800'
+                      : 'bg-red-50 border border-red-200 text-red-800'
+                  }`}>
+                    {imgbbTestStatus.type === 'success' ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-red-600 shrink-0" />
+                    )}
+                    <span>{imgbbTestStatus.message}</span>
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-[#3A2F28] uppercase tracking-wider mb-1.5">
+                      Your ImgBB API Key (From api.imgbb.com)
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="relative flex-1 min-w-0">
+                        <Key className="w-4 h-4 text-[#B68C4A] absolute left-3 top-1/2 -translate-y-1/2 shrink-0" />
+                        <input
+                          type="text"
+                          value={settings.imgbbApiKey || ''}
+                          onChange={(e) => setSettings({ ...settings, imgbbApiKey: e.target.value.trim() })}
+                          placeholder="Paste your 32-character ImgBB API Key here..."
+                          className="w-full pl-9 pr-4 py-2.5 bg-[#F7F2EA] border border-[#D8C2A3] rounded-xl text-xs sm:text-sm font-mono text-[#242424] min-w-0"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleTestImgbbKey}
+                        disabled={isTestingImgbbKey}
+                        className="px-4 py-2 bg-[#8C1D18] hover:bg-[#5A0F12] text-white rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 shadow-sm shrink-0 cursor-pointer disabled:opacity-50"
+                      >
+                        {isTestingImgbbKey ? (
+                          <Loader2 className="w-4 h-4 animate-spin text-[#D4B16A]" />
+                        ) : (
+                          <CheckCircle2 className="w-4 h-4 text-[#D4B16A]" />
+                        )}
+                        <span>{isTestingImgbbKey ? 'Testing Connection...' : 'Test & Save Key'}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-[#FAF8F5] border border-[#D8C2A3] rounded-xl text-xs text-[#5A4F43]">
+                    <div className="flex items-center gap-1.5">
+                      <ExternalLink className="w-3.5 h-3.5 text-[#8C1D18] shrink-0" />
+                      <span>Don't have an ImgBB key? It is 100% free with unlimited image hosting.</span>
+                    </div>
+                    <a
+                      href="https://api.imgbb.com/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#8C1D18] font-bold hover:underline flex items-center gap-1 shrink-0"
+                    >
+                      <span>Get Free API Key on ImgBB.com</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 3: WHATSAPP & CONTACT SETTINGS */}
+              <div className="bg-white p-4 sm:p-7 rounded-2xl sm:rounded-3xl border border-[#D8C2A3] shadow-sm min-w-0">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#F2ECE1] pb-4 mb-5">
+                  <div>
+                    <h3 className="text-lg sm:text-xl font-bold font-serif-playfair text-[#242424] flex items-center gap-2">
+                      <PhoneCall className="w-5 h-5 text-[#8C1D18]" />
+                      <span>WhatsApp & Direct Contact Settings</span>
+                    </h3>
+                    <p className="text-xs text-[#3A2F28]/70 mt-0.5">
+                      Update the target admin WhatsApp phone number, display phone, email, and branch addresses.
+                    </p>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-[#3A2F28] uppercase tracking-wider mb-1">
-                    Goalpara Office Address
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={settings.goalparaAddress}
-                    onChange={(e) => setSettings({ ...settings, goalparaAddress: e.target.value })}
-                    className="w-full px-4 py-2 bg-[#F7F2EA] border border-[#D8C2A3] rounded-xl text-sm font-medium min-w-0"
-                  />
-                </div>
+                {saveSuccessMsg && (
+                  <div className="p-3 mb-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-2xs">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{saveSuccessMsg}</span>
+                  </div>
+                )}
 
-                <div className="pt-4">
-                  <button
-                    type="submit"
-                    className="w-full bg-[#8C1D18] hover:bg-[#5A0F12] text-white py-3 rounded-xl font-semibold text-sm shadow-md cursor-pointer transition-colors flex items-center justify-center gap-2 min-h-[44px]"
-                  >
-                    <Save className="w-4 h-4 text-[#D4B16A] shrink-0" />
-                    <span>Save Contact & WhatsApp Settings</span>
-                  </button>
+                <form onSubmit={handleSaveSettingsForm} className="space-y-4 min-w-0">
+                  <div>
+                    <label className="block text-xs font-bold text-[#3A2F28] uppercase tracking-wider mb-1">
+                      Target Admin WhatsApp Number (Numeric string with country code)
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={settings.adminWhatsApp}
+                      onChange={(e) => setSettings({ ...settings, adminWhatsApp: e.target.value })}
+                      placeholder="e.g. 916002483363"
+                      className="w-full px-4 py-2.5 bg-[#F7F2EA] border border-[#D8C2A3] rounded-xl text-sm font-mono font-bold text-[#8C1D18] min-w-0"
+                    />
+                    <span className="text-[11px] text-[#3A2F28]/60 mt-1 block">
+                      All "Inquire Now" and setup inquiry clicks will automatically open WhatsApp with this phone number.
+                    </span>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#3A2F28] uppercase tracking-wider mb-1">
+                      Display Phone Number
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={settings.phoneDisplay}
+                      onChange={(e) => setSettings({ ...settings, phoneDisplay: e.target.value })}
+                      className="w-full px-4 py-2 bg-[#F7F2EA] border border-[#D8C2A3] rounded-xl text-sm font-medium min-w-0"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#3A2F28] uppercase tracking-wider mb-1">
+                      Contact Email Address
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={settings.email}
+                      onChange={(e) => setSettings({ ...settings, email: e.target.value })}
+                      className="w-full px-4 py-2 bg-[#F7F2EA] border border-[#D8C2A3] rounded-xl text-sm font-medium min-w-0"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#3A2F28] uppercase tracking-wider mb-1">
+                      Guwahati Office Address
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={settings.guwahatiAddress}
+                      onChange={(e) => setSettings({ ...settings, guwahatiAddress: e.target.value })}
+                      className="w-full px-4 py-2 bg-[#F7F2EA] border border-[#D8C2A3] rounded-xl text-sm font-medium min-w-0"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-[#3A2F28] uppercase tracking-wider mb-1">
+                      Goalpara Office Address
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={settings.goalparaAddress}
+                      onChange={(e) => setSettings({ ...settings, goalparaAddress: e.target.value })}
+                      className="w-full px-4 py-2 bg-[#F7F2EA] border border-[#D8C2A3] rounded-xl text-sm font-medium min-w-0"
+                    />
+                  </div>
+
+                  <div className="pt-3">
+                    <button
+                      type="submit"
+                      className="w-full bg-[#8C1D18] hover:bg-[#5A0F12] text-white py-3 rounded-xl font-semibold text-sm shadow-md cursor-pointer transition-colors flex items-center justify-center gap-2 min-h-[44px]"
+                    >
+                      <Save className="w-4 h-4 text-[#D4B16A] shrink-0" />
+                      <span>Save All Contact & WhatsApp Settings</span>
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+
+          {/* ================= TAB: BANQUET CATERING MENU CMS ================= */}
+          {activeTab === 'banquet' && (
+            <div className="space-y-6 min-w-0">
+              {/* Header Box */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#F7F2EA] p-4 rounded-2xl border border-[#D8C2A3]">
+                <div>
+                  <h3 className="font-serif-playfair text-lg sm:text-xl font-bold text-[#242424] flex items-center gap-2">
+                    <ChefHat className="w-5 h-5 text-[#8C1D18]" />
+                    <span>Banquet Catering Menu Items</span>
+                  </h3>
+                  <p className="text-xs text-[#5A4F43] mt-0.5">
+                    Add, edit or organize dishes across Starters, Main Course, Non-Veg, Breads and Assamese Classics.
+                  </p>
                 </div>
-              </form>
+                <div className="flex items-center gap-2 text-xs font-bold text-[#8C1D18] bg-white px-3.5 py-2 rounded-xl border border-[#D8C2A3] shrink-0">
+                  <Utensils className="w-4 h-4 text-[#D4B16A]" />
+                  <span>
+                    {banquetCategories.reduce((acc, c) => acc + c.subSections.reduce((sAcc, s) => sAcc + s.items.length, 0), 0)} Total Dishes Listed
+                  </span>
+                </div>
+              </div>
+
+              {/* Categories Accordion / List */}
+              <div className="space-y-6">
+                {banquetCategories.map((cat) => (
+                  <div key={cat.id} className="bg-white rounded-2xl border border-[#D8C2A3] p-4 sm:p-6 shadow-xs space-y-4">
+                    {/* Category Title */}
+                    <div className="flex items-center justify-between border-b border-[#F2ECE1] pb-3">
+                      <div className="flex items-center gap-2.5">
+                        <span className="w-3 h-3 rounded-full bg-[#8C1D18]" />
+                        <h4 className="font-bold text-base sm:text-lg text-[#242424]">{cat.titleEn}</h4>
+                        <span className="text-xs text-[#8C7A6B] font-serif">({cat.titleAs})</span>
+                      </div>
+                      {cat.badgeEn && (
+                        <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-[#D4B16A]/20 text-[#8C1D18] border border-[#D4B16A]/40 shrink-0">
+                          {cat.badgeEn}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Subsections under Category */}
+                    <div className="space-y-5">
+                      {cat.subSections.map((sub) => (
+                        <div key={sub.id} className="bg-[#FAF8F5] rounded-xl border border-[#E6DCCE] p-3.5 sm:p-4 space-y-3">
+                          <div className="flex items-center justify-between">
+                            <h5 className="text-xs sm:text-sm font-extrabold uppercase text-[#8C1D18] tracking-tight flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#D4B16A]" />
+                              <span>{sub.titleEn}</span>
+                              <span className="text-gray-400 font-normal">({sub.titleAs})</span>
+                            </h5>
+
+                            <button
+                              type="button"
+                              onClick={() => handleOpenAddDish(cat.id, sub.id)}
+                              className="px-3 py-1 bg-[#8C1D18] hover:bg-[#5A0F12] text-white text-xs font-semibold rounded-lg shadow-2xs flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Add Dish</span>
+                            </button>
+                          </div>
+
+                          {/* Dishes Grid */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                            {sub.items.map((item) => (
+                              <div
+                                key={item.id}
+                                className="bg-white p-2.5 rounded-lg border border-[#E6DCCE] flex items-center justify-between text-xs gap-2 group hover:border-[#8C1D18]/40 shadow-2xs transition-all"
+                              >
+                                <div className="flex items-center gap-2 min-w-0 pr-1">
+                                  {/* Veg/NonVeg Toggle */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleDishVeg(cat.id, sub.id, item.id)}
+                                    className={`w-4 h-4 rounded-xs border flex items-center justify-center shrink-0 p-0.5 cursor-pointer ${
+                                      item.isVeg === false
+                                        ? 'border-red-600 bg-red-50'
+                                        : 'border-emerald-600 bg-emerald-50'
+                                    }`}
+                                    title="Click to toggle Veg / Non-Veg"
+                                  >
+                                    <span
+                                      className={`w-1.5 h-1.5 rounded-full ${
+                                        item.isVeg === false ? 'bg-red-600' : 'bg-emerald-600'
+                                      }`}
+                                    />
+                                  </button>
+
+                                  <div className="min-w-0">
+                                    <p className="font-semibold text-[#242424] truncate">{item.nameEn}</p>
+                                    <p className="text-[10px] text-[#8C7A6B] font-assamese truncate">{item.nameAs}</p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {/* Popular Toggle */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleDishPopular(cat.id, sub.id, item.id)}
+                                    className={`p-1 rounded cursor-pointer transition-colors ${
+                                      item.popular
+                                        ? 'bg-amber-100 text-amber-700 font-bold'
+                                        : 'text-gray-300 hover:text-amber-500'
+                                    }`}
+                                    title={item.popular ? 'Marked Popular' : 'Click to mark as Popular'}
+                                  >
+                                    <Sparkles className="w-3.5 h-3.5 fill-current" />
+                                  </button>
+
+                                  {/* Edit Dish */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenEditDish(cat.id, sub.id, item)}
+                                    className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-[#8C1D18] cursor-pointer"
+                                    title="Edit dish item"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                  </button>
+
+                                  {/* Delete Dish */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteDish(cat.id, sub.id, item.id)}
+                                    className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600 cursor-pointer"
+                                    title="Delete dish"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -1837,7 +2628,149 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
             <ClientManagement />
           )}
 
+          {/* ================= TAB: INSTAGRAM & IN-APP BROWSER BYPASS ================= */}
+          {activeTab === 'instagram_bypass' && (
+            <InstagramBypassHub />
+          )}
+
         </div>
+
+        {/* MODAL: ADD / EDIT BANQUET DISH ITEM */}
+        <AnimatePresence>
+          {isDishModalOpen && (
+            <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-xs flex flex-col items-center justify-center p-3 sm:p-6 overflow-hidden">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.92 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.92 }}
+                className="bg-[#FAF8F5] border-2 border-[#D4B16A] rounded-2xl max-w-md w-full overflow-hidden shadow-2xl relative my-auto flex flex-col min-h-0"
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsDishModalOpen(false)}
+                  className="absolute top-3.5 right-3.5 w-8 h-8 rounded-full bg-[#3A2F28]/10 hover:bg-[#8C1D18] hover:text-white flex items-center justify-center text-[#3A2F28] cursor-pointer z-10 transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+
+                <div className="p-5 sm:p-6 space-y-4">
+                  <h3 className="text-base sm:text-lg font-bold font-serif-playfair text-[#242424] pr-8">
+                    {editingDishTarget?.dish ? 'Edit Banquet Dish' : 'Add New Banquet Dish'}
+                  </h3>
+
+                  <form onSubmit={handleSaveDish} className="space-y-4">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold uppercase text-[#3A2F28]">
+                          Dish Name (English) *
+                        </label>
+                        {translatingFieldKey === 'dishName' && (
+                          <span className="text-[10px] text-[#8C1D18] font-bold flex items-center gap-1">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <span>Translating...</span>
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        value={dishNameEn}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDishNameEn(val);
+                          triggerAutoTranslate('dishName', val, 'en', 'as', setDishNameAs);
+                        }}
+                        placeholder="e.g. Chilli Paneer, Fish Sorshe..."
+                        className="w-full px-3.5 py-2.5 bg-[#F7F2EA] border border-[#D8C2A3] rounded-xl text-sm font-medium focus:ring-2 focus:ring-[#8C1D18] outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-bold uppercase text-[#3A2F28]">
+                          Dish Name (Assamese) *
+                        </label>
+                        {translatingFieldKey === 'dishName' && (
+                          <span className="text-[10px] text-[#8C1D18] font-bold flex items-center gap-1">
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <span>Translating...</span>
+                          </span>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        required
+                        value={dishNameAs}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setDishNameAs(val);
+                          triggerAutoTranslate('dishName', val, 'as', 'en', setDishNameEn);
+                        }}
+                        placeholder="অসমীয়া নাম..."
+                        className="w-full px-3.5 py-2.5 bg-[#F7F2EA] border border-[#D8C2A3] rounded-xl text-sm font-assamese focus:ring-2 focus:ring-[#8C1D18] outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <div className="bg-[#F7F2EA] p-3 rounded-xl border border-[#D8C2A3]">
+                        <label className="block text-[11px] font-bold uppercase text-[#3A2F28] mb-1.5">
+                          Dietary Type
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setDishIsVeg(!dishIsVeg)}
+                          className={`w-full py-1.5 px-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                            dishIsVeg
+                              ? 'bg-emerald-700 text-white shadow-2xs'
+                              : 'bg-red-700 text-white shadow-2xs'
+                          }`}
+                        >
+                          <span className={`w-2 h-2 rounded-full ${dishIsVeg ? 'bg-emerald-300' : 'bg-red-300'}`} />
+                          <span>{dishIsVeg ? 'Pure Veg' : 'Non-Veg'}</span>
+                        </button>
+                      </div>
+
+                      <div className="bg-[#F7F2EA] p-3 rounded-xl border border-[#D8C2A3] flex flex-col justify-between">
+                        <label className="block text-[11px] font-bold uppercase text-[#3A2F28] mb-1">
+                          Special Badge
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer py-1">
+                          <input
+                            type="checkbox"
+                            checked={dishPopular}
+                            onChange={(e) => setDishPopular(e.target.checked)}
+                            className="w-4 h-4 accent-[#8C1D18] rounded cursor-pointer"
+                          />
+                          <span className="text-xs font-bold text-[#8C1D18] flex items-center gap-1">
+                            <Sparkles className="w-3.5 h-3.5 fill-current text-amber-500" />
+                            <span>Popular</span>
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div className="pt-3 flex items-center justify-end gap-2 border-t border-[#D8C2A3]">
+                      <button
+                        type="button"
+                        onClick={() => setIsDishModalOpen(false)}
+                        className="px-4 py-2 rounded-xl text-xs font-semibold text-[#3A2F28] bg-gray-200 hover:bg-gray-300 cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="px-5 py-2 rounded-xl text-xs font-bold text-white bg-[#8C1D18] hover:bg-[#5A0F12] shadow-sm cursor-pointer flex items-center gap-1.5"
+                      >
+                        <Save className="w-3.5 h-3.5 text-[#D4B16A]" />
+                        <span>Save Dish</span>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* MODAL / OVERLAY FOR ADDING & EDITING GALLERY ITEM */}
         <AnimatePresence>
@@ -1915,26 +2848,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                     />
                   </div>
 
-                  {/* Image URL with ImgBB Auto-Resolver & Gemini 3.1 Flash Auto-Namer */}
+                  {/* Image URL with ImgBB Direct Upload & Auto-Resolver & Gemini 3.1 Flash Auto-Namer */}
                   <div className="min-w-0">
+                    <input
+                      type="file"
+                      ref={galleryImgbbFileRef}
+                      onChange={handleGalleryImgbbUpload}
+                      accept="image/png,image/jpeg,image/webp,image/jpg"
+                      className="hidden"
+                    />
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                       <label className="block text-xs font-bold uppercase text-[#3A2F28]">
                         Image URL / ImgBB Link *
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => triggerGeminiGalleryAnalysis()}
-                        disabled={isAnalyzingImage || !formImage}
-                        className="px-2.5 py-1.5 rounded-lg bg-[#8C1D18] hover:bg-[#5A0F12] text-white text-[11px] font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors disabled:opacity-50 shrink-0"
-                        title="Analyze photo with Gemini 3.1 Flash AI to auto-generate names & details"
-                      >
-                        {isAnalyzingImage ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-[#D4B16A]" />
-                        ) : (
-                          <Wand2 className="w-3.5 h-3.5 text-[#D4B16A]" />
-                        )}
-                        <span>✨ Auto-Name with Gemini AI</span>
-                      </button>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => galleryImgbbFileRef.current?.click()}
+                          disabled={isUploadingGalleryImgbb}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#FAF8F5] hover:bg-[#F0EAE1] text-[#8C1D18] border border-[#D8C2A3] text-[11px] font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer transition-colors disabled:opacity-50 shrink-0"
+                          title="Upload image directly to ImgBB and generate URL"
+                        >
+                          {isUploadingGalleryImgbb ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#8C1D18]" />
+                          ) : (
+                            <CloudUpload className="w-3.5 h-3.5 text-[#8C1D18]" />
+                          )}
+                          <span>{isUploadingGalleryImgbb ? 'Uploading...' : 'Upload Image (ImgBB)'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => triggerGeminiGalleryAnalysis()}
+                          disabled={isAnalyzingImage || !formImage}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#8C1D18] hover:bg-[#5A0F12] text-white text-[11px] font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors disabled:opacity-50 shrink-0"
+                          title="Analyze photo with Gemini 3.1 Flash AI to auto-generate names & details"
+                        >
+                          {isAnalyzingImage ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#D4B16A]" />
+                          ) : (
+                            <Wand2 className="w-3.5 h-3.5 text-[#D4B16A]" />
+                          )}
+                          <span>✨ Auto-Name with AI</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="relative min-w-0">
@@ -2363,26 +3320,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ isOpen, onClose 
                   </h3>
 
                 <form onSubmit={handleSaveHeroSlide} className="space-y-4 min-w-0">
-                  {/* Hero Slide Picture URL with ImgBB Auto-Resolver & Gemini 3.1 Flash */}
+                  {/* Hero Slide Picture URL with ImgBB Direct Upload & Auto-Resolver & Gemini 3.1 Flash */}
                   <div className="min-w-0">
+                    <input
+                      type="file"
+                      ref={heroSlideImgbbFileRef}
+                      onChange={handleHeroImgbbUpload}
+                      accept="image/png,image/jpeg,image/webp,image/jpg"
+                      className="hidden"
+                    />
                     <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                       <label className="block text-xs font-bold uppercase text-[#3A2F28]">
                         Hero Slide Picture URL / ImgBB Link *
                       </label>
-                      <button
-                        type="button"
-                        onClick={() => triggerGeminiHeroSlideAnalysis()}
-                        disabled={isAnalyzingImage || !slideImage}
-                        className="px-2.5 py-1.5 rounded-lg bg-[#8C1D18] hover:bg-[#5A0F12] text-white text-[11px] font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors disabled:opacity-50 shrink-0"
-                        title="Analyze photo with Gemini 3.1 Flash AI to auto-generate slide headlines"
-                      >
-                        {isAnalyzingImage ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-[#D4B16A]" />
-                        ) : (
-                          <Wand2 className="w-3.5 h-3.5 text-[#D4B16A]" />
-                        )}
-                        <span>✨ Auto-Generate Slide Text</span>
-                      </button>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => heroSlideImgbbFileRef.current?.click()}
+                          disabled={isUploadingHeroImgbb}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#FAF8F5] hover:bg-[#F0EAE1] text-[#8C1D18] border border-[#D8C2A3] text-[11px] font-bold flex items-center gap-1.5 shadow-2xs cursor-pointer transition-colors disabled:opacity-50 shrink-0"
+                          title="Upload hero picture directly to ImgBB and generate URL"
+                        >
+                          {isUploadingHeroImgbb ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#8C1D18]" />
+                          ) : (
+                            <CloudUpload className="w-3.5 h-3.5 text-[#8C1D18]" />
+                          )}
+                          <span>{isUploadingHeroImgbb ? 'Uploading...' : 'Upload Hero Photo (ImgBB)'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => triggerGeminiHeroSlideAnalysis()}
+                          disabled={isAnalyzingImage || !slideImage}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#8C1D18] hover:bg-[#5A0F12] text-white text-[11px] font-semibold flex items-center gap-1.5 shadow-xs cursor-pointer transition-colors disabled:opacity-50 shrink-0"
+                          title="Analyze photo with Gemini 3.1 Flash AI to auto-generate slide headlines"
+                        >
+                          {isAnalyzingImage ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-[#D4B16A]" />
+                          ) : (
+                            <Wand2 className="w-3.5 h-3.5 text-[#D4B16A]" />
+                          )}
+                          <span>✨ Auto-Generate Slide Text</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="relative min-w-0">
