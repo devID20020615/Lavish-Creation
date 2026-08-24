@@ -1,6 +1,7 @@
-import { GalleryItem } from '../types';
+import { GalleryItem, MenuCategory } from '../types';
 import { GALLERY_ITEMS } from '../data/mockData';
-import { db } from './firebase';
+import { DEFAULT_BANQUET_MENU } from '../data/banquetMenuData';
+import { db, handleFirestoreError, OperationType } from './firebase';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 
 export interface TestimonialItem {
@@ -45,6 +46,8 @@ export interface AdminContactSettings {
   email: string;
   guwahatiAddress: string;
   goalparaAddress: string;
+  logoUrl?: string;
+  imgbbApiKey?: string;
 }
 
 export interface VideoItem {
@@ -61,6 +64,7 @@ const STORAGE_KEYS = {
   HERO_SLIDES: 'bb_cms_hero_slides_v1',
   HERO_CONFIG: 'bb_cms_hero_config_v1',
   VIDEOS: 'bb_cms_videos_v1',
+  BANQUET_MENU: 'bb_cms_banquet_menu_v2',
   AUTH: 'bb_cms_auth_session_v1',
   REMEMBER_ADMIN: 'bb_cms_remember_admin_v1',
   REMEMBER_ID: 'bb_cms_remember_id_v1',
@@ -156,6 +160,8 @@ const DEFAULT_SETTINGS: AdminContactSettings = {
   email: 'xyzabcpqr@gmail.com',
   guwahatiAddress: 'Swaraj Nagar, Hengrabari, Guwahati, Assam',
   goalparaAddress: 'Matia, Goalpara, Assam',
+  logoUrl: 'https://i.ibb.co/ds07wJms/Chat-GPT-Image-Jul-28-2026-10-32-13-PM.png',
+  imgbbApiKey: '',
 };
 
 const DEFAULT_VIDEOS: VideoItem[] = [
@@ -210,13 +216,14 @@ if (typeof window !== 'undefined') {
     .then(res => res.json())
     .then(data => {
       if (data && data.status === 'ok' && data.data) {
-        const { gallery, testimonials, settings, heroSlides, heroConfig, videos } = data.data;
+        const { gallery, testimonials, settings, heroSlides, heroConfig, videos, banquetMenu } = data.data;
         if (gallery) localStorage.setItem(STORAGE_KEYS.GALLERY, JSON.stringify(gallery));
         if (testimonials) localStorage.setItem(STORAGE_KEYS.TESTIMONIALS, JSON.stringify(testimonials));
         if (settings) localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
         if (heroSlides) localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(heroSlides));
         if (heroConfig) localStorage.setItem(STORAGE_KEYS.HERO_CONFIG, JSON.stringify(heroConfig));
         if (videos) localStorage.setItem(STORAGE_KEYS.VIDEOS, JSON.stringify(videos));
+        if (banquetMenu) localStorage.setItem(STORAGE_KEYS.BANQUET_MENU, JSON.stringify(banquetMenu));
         notifyStorageChange();
       }
     })
@@ -258,6 +265,7 @@ async function pushAllToBackend() {
     heroSlides: getStoredHeroSlides(),
     heroConfig: getStoredHeroConfig(),
     videos: getStoredVideos(),
+    banquetMenu: getStoredBanquetMenu(),
     updatedAt: Date.now()
   };
 
@@ -279,6 +287,11 @@ async function pushAllToBackend() {
     await setDoc(docRef, payload);
   } catch (err) {
     console.error('Error syncing to Firestore:', err);
+    try {
+      handleFirestoreError(err, OperationType.WRITE, 'cms_content/main');
+    } catch {
+      // prevent unhandled rejections
+    }
   } finally {
     setTimeout(() => {
       isWritingToFirestore = false;
@@ -299,7 +312,7 @@ if (typeof window !== 'undefined') {
         if (snapshot.exists()) {
           const data = snapshot.data();
           if (data) {
-            const { gallery, testimonials, settings, heroSlides, heroConfig, videos } = data;
+            const { gallery, testimonials, settings, heroSlides, heroConfig, videos, banquetMenu } = data;
             let updated = false;
 
             if (gallery && JSON.stringify(gallery) !== localStorage.getItem(STORAGE_KEYS.GALLERY)) {
@@ -310,9 +323,19 @@ if (typeof window !== 'undefined') {
               localStorage.setItem(STORAGE_KEYS.TESTIMONIALS, JSON.stringify(testimonials));
               updated = true;
             }
-            if (settings && JSON.stringify(settings) !== localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
-              localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
-              updated = true;
+            if (settings) {
+              const current = getStoredSettings();
+              const merged = {
+                ...DEFAULT_SETTINGS,
+                ...current,
+                ...settings,
+                logoUrl: settings.logoUrl || current.logoUrl || DEFAULT_SETTINGS.logoUrl,
+                imgbbApiKey: settings.imgbbApiKey !== undefined ? settings.imgbbApiKey : (current.imgbbApiKey || ''),
+              };
+              if (JSON.stringify(merged) !== localStorage.getItem(STORAGE_KEYS.SETTINGS)) {
+                localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(merged));
+                updated = true;
+              }
             }
             if (heroSlides && JSON.stringify(heroSlides) !== localStorage.getItem(STORAGE_KEYS.HERO_SLIDES)) {
               localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(heroSlides));
@@ -326,6 +349,10 @@ if (typeof window !== 'undefined') {
               localStorage.setItem(STORAGE_KEYS.VIDEOS, JSON.stringify(videos));
               updated = true;
             }
+            if (banquetMenu && JSON.stringify(banquetMenu) !== localStorage.getItem(STORAGE_KEYS.BANQUET_MENU)) {
+              localStorage.setItem(STORAGE_KEYS.BANQUET_MENU, JSON.stringify(banquetMenu));
+              updated = true;
+            }
 
             if (updated) {
               notifyStorageChange();
@@ -337,7 +364,12 @@ if (typeof window !== 'undefined') {
         }
       },
       (err) => {
-        console.warn('Firestore real-time subscription error:', err);
+        console.warn('Firestore real-time subscription warning:', err);
+        try {
+          handleFirestoreError(err, OperationType.GET, 'cms_content/main');
+        } catch {
+          // fallback
+        }
       }
     );
   } catch (e) {
@@ -455,7 +487,13 @@ export function getStoredSettings(): AdminContactSettings {
       localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(DEFAULT_SETTINGS));
       return DEFAULT_SETTINGS;
     }
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    return {
+      ...DEFAULT_SETTINGS,
+      ...parsed,
+      logoUrl: parsed.logoUrl || DEFAULT_SETTINGS.logoUrl,
+      imgbbApiKey: parsed.imgbbApiKey || '',
+    };
   } catch (err) {
     console.error('Error loading settings:', err);
     return DEFAULT_SETTINGS;
@@ -464,11 +502,99 @@ export function getStoredSettings(): AdminContactSettings {
 
 export function saveSettings(settings: AdminContactSettings) {
   try {
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
+    const cleanSettings: AdminContactSettings = {
+      ...DEFAULT_SETTINGS,
+      ...settings,
+      logoUrl: settings.logoUrl || DEFAULT_SETTINGS.logoUrl,
+      imgbbApiKey: (settings.imgbbApiKey || '').trim(),
+    };
+    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(cleanSettings));
     notifyStorageChange();
     pushAllToBackend();
   } catch (err) {
     console.error('Error saving settings:', err);
+  }
+}
+
+/**
+ * Direct ImgBB Cloud Uploader Helper
+ * Uploads an image file or base64 data to ImgBB and returns the direct CDN URL (https://i.ibb.co/...).
+ */
+export async function uploadImageToImgbb(
+  imageDataOrBase64: string,
+  customApiKey?: string,
+  imageName?: string
+): Promise<{ success: boolean; url: string; error?: string }> {
+  try {
+    const settings = getStoredSettings();
+    const apiKey = (customApiKey || settings.imgbbApiKey || '').trim();
+
+    // 1. Try server proxy endpoint first
+    try {
+      const serverRes = await fetch('/api/upload-imgbb', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: imageDataOrBase64,
+          apiKey,
+          name: imageName,
+        }),
+      });
+
+      const json = await serverRes.json().catch(() => null);
+      if (serverRes.ok && json?.success && json?.url) {
+        return { success: true, url: json.url };
+      } else if (json?.error && !apiKey) {
+        return { success: false, url: '', error: json.error };
+      }
+    } catch {
+      // Fall through to direct client fetch if server not reachable
+    }
+
+    // 2. Direct client-side upload to ImgBB API
+    if (apiKey) {
+      let cleanImage = imageDataOrBase64;
+      if (cleanImage.startsWith('data:')) {
+        const parts = cleanImage.split(',');
+        if (parts.length > 1) {
+          cleanImage = parts[1];
+        }
+      }
+
+      const formData = new URLSearchParams();
+      formData.append('image', cleanImage);
+      if (imageName) formData.append('name', imageName);
+
+      const res = await fetch(`https://api.imgbb.com/1/upload?key=${encodeURIComponent(apiKey)}`, {
+        method: 'POST',
+        body: formData,
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      });
+
+      const resData = await res.json();
+      if (resData.success && resData.data) {
+        const direct = resData.data.url || resData.data.display_url;
+        return { success: true, url: direct };
+      } else {
+        return {
+          success: false,
+          url: '',
+          error: resData?.error?.message || 'ImgBB upload rejected the image or API key is invalid.',
+        };
+      }
+    }
+
+    return {
+      success: false,
+      url: '',
+      error: 'Please enter your ImgBB API key in the Brand Logo & Settings tab.',
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      url: '',
+      error: err?.message || 'Network error connecting to ImgBB API.',
+    };
   }
 }
 
@@ -615,6 +741,31 @@ export function toggleVideoItemEnabled(id: string) {
   saveVideos(updated);
 }
 
+// ================= BANQUET MENU CMS CRUD =================
+export function getStoredBanquetMenu(): MenuCategory[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.BANQUET_MENU);
+    if (!raw) {
+      localStorage.setItem(STORAGE_KEYS.BANQUET_MENU, JSON.stringify(DEFAULT_BANQUET_MENU));
+      return DEFAULT_BANQUET_MENU;
+    }
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error('Error loading banquet menu:', err);
+    return DEFAULT_BANQUET_MENU;
+  }
+}
+
+export function saveBanquetMenu(categories: MenuCategory[]) {
+  try {
+    localStorage.setItem(STORAGE_KEYS.BANQUET_MENU, JSON.stringify(categories));
+    notifyStorageChange();
+    pushAllToBackend();
+  } catch (err) {
+    console.error('Error saving banquet menu:', err);
+  }
+}
+
 // Reset all storage to original initial defaults
 export function resetStorageToDefault() {
   localStorage.setItem(STORAGE_KEYS.GALLERY, JSON.stringify(GALLERY_ITEMS));
@@ -623,6 +774,7 @@ export function resetStorageToDefault() {
   localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(DEFAULT_HERO_SLIDES));
   localStorage.setItem(STORAGE_KEYS.HERO_CONFIG, JSON.stringify(DEFAULT_HERO_CONFIG));
   localStorage.setItem(STORAGE_KEYS.VIDEOS, JSON.stringify(DEFAULT_VIDEOS));
+  localStorage.setItem(STORAGE_KEYS.BANQUET_MENU, JSON.stringify(DEFAULT_BANQUET_MENU));
   notifyStorageChange();
   fetch('/api/cms/reset', { method: 'POST' }).then(() => pushAllToBackend()).catch(() => {});
 }

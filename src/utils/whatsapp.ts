@@ -44,7 +44,19 @@ export function openWhatsAppInquiry(data?: WhatsAppInquiryData) {
   const text = buildWhatsAppInquiryMessage(data);
   const encodedText = encodeURIComponent(text);
   const whatsappUrl = `https://wa.me/${targetNumber}?text=${encodedText}`;
-  window.open(whatsappUrl, '_blank');
+
+  // Robust link triggering for standard and in-app browsers (Instagram, etc.)
+  try {
+    const link = document.createElement('a');
+    link.href = whatsappUrl;
+    link.target = '_system'; // As outlined in the workaround guide for webviews
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch {
+    window.open(whatsappUrl, '_blank');
+  }
 }
 
 
