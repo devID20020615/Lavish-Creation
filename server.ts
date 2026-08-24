@@ -189,6 +189,236 @@ app.post('/api/cms/reset', (_req, res) => {
   }
 });
 
+/**
+ * Direct ImgBB Cloud Upload API endpoint
+ * Accepts: { image: base64StringOrUrl, apiKey?: string, name?: string }
+ * If apiKey is omitted in body, falls back to process.env.IMGBB_API_KEY.
+ * Uploads to https://api.imgbb.com/1/upload?key=${key}
+ * Returns: { success: true, url: string, display_url: string, delete_url?: string }
+ */
+app.post('/api/upload-imgbb', async (req, res) => {
+  try {
+    const { image, apiKey, name } = req.body;
+    const effectiveKey = (apiKey || process.env.IMGBB_API_KEY || '').trim();
+
+    if (!image) {
+      return res.status(400).json({ error: 'Image data is required for upload' });
+    }
+
+    if (!effectiveKey) {
+      return res.status(400).json({
+        error: 'ImgBB API Key is required. Please provide your ImgBB API key in CMS settings or set IMGBB_API_KEY in environment variables.',
+      });
+    }
+
+    // Clean base64 string if data URL prefix exists
+    let cleanImage = image;
+    if (typeof cleanImage === 'string' && cleanImage.startsWith('data:')) {
+      const parts = cleanImage.split(',');
+      if (parts.length > 1) {
+        cleanImage = parts[1];
+      }
+    }
+
+    const formData = new URLSearchParams();
+    formData.append('image', cleanImage);
+    if (name) {
+      formData.append('name', name);
+    }
+
+    const uploadUrl = `https://api.imgbb.com/1/upload?key=${encodeURIComponent(effectiveKey)}`;
+    const imgbbRes = await fetch(uploadUrl, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      signal: AbortSignal.timeout(20000),
+    });
+
+    const data = await imgbbRes.json();
+
+    if (!imgbbRes.ok || !data.success) {
+      const errorMsg =
+        data?.error?.message ||
+        data?.error ||
+        (typeof data === 'string' ? data : 'Failed to upload image to ImgBB');
+      return res.status(imgbbRes.status || 400).json({ error: errorMsg });
+    }
+
+    // Get direct CDN URL or display URL
+    const directUrl = data?.data?.url || data?.data?.display_url || data?.data?.image?.url;
+    return res.json({
+      success: true,
+      url: directUrl,
+      display_url: data?.data?.display_url,
+      delete_url: data?.data?.delete_url,
+      title: data?.data?.title,
+      width: data?.data?.width,
+      height: data?.data?.height,
+    });
+  } catch (err: any) {
+    console.error('Error uploading to ImgBB:', err);
+    return res.status(500).json({ error: err?.message || 'Server error uploading to ImgBB' });
+  }
+});
+
+
+/**
+ * -----------------------------------------------------------------------------
+ * INSTAGRAM & IN-APP BROWSER BYPASS WORKAROUNDS
+ * -----------------------------------------------------------------------------
+ * 1. The Direct Download Trigger (Best Success Rate):
+ * Instagram forces files/attachments to open in standard system browsers (Chrome/Safari).
+ * By serving a download with octet-stream header containing an HTML auto-redirect,
+ * the in-app browser kicks the user out into Chrome or Safari.
+ */
+app.get(['/api/open-external', '/bypass-instagram', '/open-external'], (req, res) => {
+  try {
+    const rawTarget = (req.query.url as string) || req.headers.referer || '/';
+    let targetUrl = rawTarget;
+
+    // Normalize protocol & domain if relative
+    if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+      const host = req.headers.host || 'localhost:3000';
+      const proto = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+      const cleanPath = targetUrl.startsWith('/') ? targetUrl : `/${targetUrl}`;
+      targetUrl = `${proto}://${host}${cleanPath}`;
+    }
+
+    // Workaround #1: Content-Type application/octet-stream + attachment header
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', 'attachment; filename="open-in-browser.html"');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
+    // Self-executing redirect file that opens in external Safari/Chrome
+    const htmlPayload = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="0; url=${targetUrl}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Opening BB Decoration...</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #FAF8F5;
+      color: #242424;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+    }
+    .card {
+      background: #ffffff;
+      padding: 28px;
+      border-radius: 16px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+      max-width: 420px;
+      width: 100%;
+      border: 1px solid #EADBCE;
+    }
+    .btn {
+      display: inline-block;
+      margin-top: 16px;
+      padding: 12px 24px;
+      background: #8C1D18;
+      color: #ffffff;
+      text-decoration: none;
+      border-radius: 9999px;
+      font-weight: 600;
+      font-size: 14px;
+    }
+  </style>
+  <script>
+    (function() {
+      // 1. Try immediate location replacement
+      window.location.replace(${JSON.stringify(targetUrl)});
+      // 2. Fallback href after 200ms
+      setTimeout(function() {
+        window.location.href = ${JSON.stringify(targetUrl)};
+      }, 200);
+    })();
+  </script>
+</head>
+<body>
+  <div class="card">
+    <h2 style="margin: 0 0 10px; color: #8C1D18;">BB Decoration</h2>
+    <p style="color: #666; font-size: 14px; margin: 0 0 16px;">
+      Redirecting to standard web browser (Chrome / Safari)...
+    </p>
+    <a href="${targetUrl}" class="btn" target="_system">Click to Open Website</a>
+  </div>
+</body>
+</html>`;
+
+    return res.send(htmlPayload);
+  } catch (err: any) {
+    console.error('Error generating direct download bypass:', err);
+    return res.redirect('/');
+  }
+});
+
+// Workaround #2: Deep Linking Protocol Redirector for Chrome
+app.get('/open-in-chrome', (req, res) => {
+  const rawTarget = (req.query.url as string) || req.headers.referer || '/';
+  let targetUrl = rawTarget;
+  if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
+    const host = req.headers.host || 'localhost:3000';
+    const proto = req.secure || req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+    targetUrl = `${proto}://${host}${targetUrl.startsWith('/') ? '' : '/'}${targetUrl}`;
+  }
+  const cleanUrl = targetUrl.replace(/^https?:\/\//i, '');
+  const chromeUrl = `googlechromes://${cleanUrl}`;
+  return res.redirect(chromeUrl);
+});
+
+// Bypass status and information API
+app.get('/api/instagram-bypass/info', (req, res) => {
+  const userAgent = req.headers['user-agent'] || '';
+  const isInstagram = /Instagram/i.test(userAgent);
+  const isFacebook = /FBAN|FBAV|FB_IAB/i.test(userAgent);
+  const isInApp = isInstagram || isFacebook || /Line|Twitter|TikTok|Snapchat/i.test(userAgent);
+
+  res.json({
+    status: 'ok',
+    detectedUserAgent: userAgent,
+    isInApp,
+    isInstagram,
+    isFacebook,
+    bypassMethodsAvailable: [
+      {
+        method: 'Direct Download Trigger',
+        description: 'Sends application/octet-stream attachment header with HTML redirect payload',
+        endpoint: '/api/open-external?url='
+      },
+      {
+        method: 'Google Chrome Deep Linking',
+        scheme: 'googlechromes:// or googlechrome://',
+        endpoint: '/open-in-chrome?url='
+      },
+      {
+        method: 'Android Chrome Intent',
+        scheme: 'intent://[URL]#Intent;scheme=https;package=com.android.chrome;end'
+      },
+      {
+        method: 'Opera Deep Linking',
+        scheme: 'opera://[URL]'
+      },
+      {
+        method: 'Native _system Target',
+        attribute: 'target="_system"'
+      }
+    ]
+  });
+});
+
 // Real-time ImgBB URL Resolver Endpoint
 app.post('/api/resolve-image', async (req, res) => {
   try {

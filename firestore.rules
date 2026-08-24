@@ -11,6 +11,11 @@ service cloud.firestore {
     match /clients/{clientId} {
       allow read, write: if true;
     }
+
+    // CMS Content collection - allows real-time website updates & CMS sync across devices
+    match /cms_content/{docId} {
+      allow read, write: if true;
+    }
   }
 }
 

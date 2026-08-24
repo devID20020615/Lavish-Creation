@@ -21,12 +21,30 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["name", "projectName", "fullPayment", "advancePayment", "remainingPayment", "paymentStatus", "projectStatus"]
+    },
+    "CmsContent": {
+      "title": "CmsContent",
+      "description": "Global CMS content for website sections including gallery, hero, videos, testimonials, and settings",
+      "type": "object",
+      "properties": {
+        "gallery": { "type": "array" },
+        "testimonials": { "type": "array" },
+        "settings": { "type": "object" },
+        "heroSlides": { "type": "array" },
+        "heroConfig": { "type": "object" },
+        "videos": { "type": "array" },
+        "updatedAt": { "type": "number" }
+      }
     }
   },
   "firestore": {
     "/clients/{clientId}": {
       "schema": { "$ref": "#/entities/Client" },
       "description": "Collection of client project management and payment tracking records"
+    },
+    "/cms_content/{docId}": {
+      "schema": { "$ref": "#/entities/CmsContent" },
+      "description": "Global CMS website configuration and section records"
     }
   }
 }
