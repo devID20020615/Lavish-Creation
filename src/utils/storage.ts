@@ -66,6 +66,7 @@ const STORAGE_KEYS = {
   VIDEOS: 'bb_cms_videos_v1',
   BANQUET_MENU: 'bb_cms_banquet_menu_v2',
   AUTH: 'bb_cms_auth_session_v1',
+  AUTH_TOKEN: 'bb_cms_auth_token_v1',
   REMEMBER_ADMIN: 'bb_cms_remember_admin_v1',
   REMEMBER_ID: 'bb_cms_remember_id_v1',
 };
@@ -76,7 +77,8 @@ const DEFAULT_HERO_SLIDES: HeroSlideItem[] = [
     image: 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=1200&q=70',
     tagAs: 'অসমীয়া পৰম্পৰা, আধুনিক সৌন্দৰ্য',
     tagEn: 'Assamese Heritage, Modern Luxury',
-    titleAs: 'সপোনৰ অনুষ্ঠান, নিখুঁত সজ্জা',
+    titleAs: 'সপোনৰ অনুষ্ঠা
+ন, নিখুঁত সজ্জা',
     titleEn: 'Crafting Timeless Assamese Wedding Memories',
     subAs: 'প্ৰতিটো বিয়াৰ মঞ্চত জাপি, শৰাই আৰু বগা ফুলৰ ৰাজকীয় প্ৰেক্ষাপট।',
     subEn: 'Handcrafted Jaapi, polished brass Xorai, and cascading orchids for your sacred day.',
@@ -125,7 +127,8 @@ const DEFAULT_TESTIMONIALS: TestimonialItem[] = [
     nameEn: 'Dr. Barooah Family',
     locationAs: 'গুৱাহাটী (খ্ৰীষ্টানবস্তি)',
     locationEn: 'Guwahati, Assam',
-    storyAs: 'বি বি ডেকোৰেচন দলে আমাৰ জীয়ৰীৰ বিয়াখনত যিদৰে সৰ্থেবাৰীৰ শৰাই আৰু জাপিৰ সংমিশ্ৰণত সজ্জা কৰিলে, উপস্থিত সকলো অতিথি বিমুগ্ধ হ’ল। প্ৰতিটো দিশতেই আছিল নিৰ্ভাঁজ অসমীয়া স্পৰ্শ।',
+    storyAs: 'বি বি ডেকোৰেচন দলে আমাৰ জীয
+়ৰীৰ বিয়াখনত যিদৰে সৰ্থেবাৰীৰ শৰাই আৰু জাপিৰ সংমিশ্ৰণত সজ্জা কৰিলে, উপস্থিত সকলো অতিথি বিমুগ্ধ হ’ল। প্ৰতিটো দিশতেই আছিল নিৰ্ভাঁজ অসমীয়া স্পৰ্শ।',
     storyEn: 'BB Decoration (By Lavish Creation) transformed our daughter’s wedding stage with monumental bell-metal Xorai and hand-woven Jaapis. The attention to authentic Assamese heritage was praised by all our guests.',
     eventAs: 'ৰাজকীয় বিয়া আৰু প্ৰীতি ভোজ',
     eventEn: 'Royal Biya & Reception'
@@ -164,7 +167,8 @@ const DEFAULT_SETTINGS: AdminContactSettings = {
   imgbbApiKey: '',
 };
 
-const DEFAULT_VIDEOS: VideoItem[] = [
+const DEFAULT_VIDEOS: VideoItem[
+] = [
   {
     id: 'video-1',
     url: 'https://ik.imagekit.io/1ca0lhuyg/BB%20Decoration/Todays%20venue.mp4?updatedAt=1785835959389',
@@ -221,7 +225,8 @@ if (typeof window !== 'undefined') {
         if (testimonials) localStorage.setItem(STORAGE_KEYS.TESTIMONIALS, JSON.stringify(testimonials));
         if (settings) localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
         if (heroSlides) localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(heroSlides));
-        if (heroConfig) localStorage.setItem(STORAGE_KEYS.HERO_CONFIG, JSON.stringify(heroConfig));
+        if (heroConfig) localStorage.setItem(STORAGE_KEYS.HERO_CONFIG, JSON.stringi
+fy(heroConfig));
         if (videos) localStorage.setItem(STORAGE_KEYS.VIDEOS, JSON.stringify(videos));
         if (banquetMenu) localStorage.setItem(STORAGE_KEYS.BANQUET_MENU, JSON.stringify(banquetMenu));
         notifyStorageChange();
@@ -273,7 +278,7 @@ async function pushAllToBackend() {
   try {
     fetch('/api/cms/all', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: authHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(payload),
     }).catch(() => {});
   } catch (err) {
@@ -293,7 +298,8 @@ async function pushAllToBackend() {
       // prevent unhandled rejections
     }
   } finally {
-    setTimeout(() => {
+    setTimeout(() 
+=> {
       isWritingToFirestore = false;
       setCMSLoadingState(false);
     }, 500);
@@ -341,7 +347,8 @@ if (typeof window !== 'undefined') {
               localStorage.setItem(STORAGE_KEYS.HERO_SLIDES, JSON.stringify(heroSlides));
               updated = true;
             }
-            if (heroConfig && JSON.stringify(heroConfig) !== localStorage.getItem(STORAGE_KEYS.HERO_CONFIG)) {
+            if (heroConfig && JSON.s
+tringify(heroConfig) !== localStorage.getItem(STORAGE_KEYS.HERO_CONFIG)) {
               localStorage.setItem(STORAGE_KEYS.HERO_CONFIG, JSON.stringify(heroConfig));
               updated = true;
             }
@@ -402,7 +409,8 @@ export function saveGalleryItems(items: GalleryItem[]) {
   }
 }
 
-export function addGalleryItem(item: Omit<GalleryItem, 'id'>) {
+export function addGalleryItem(item: Omit<GalleryIt
+em, 'id'>) {
   const current = getStoredGalleryItems();
   const newItem: GalleryItem = {
     ...item,
@@ -468,7 +476,8 @@ export function addTestimonial(item: Omit<TestimonialItem, 'id'>) {
 }
 
 export function updateTestimonial(updatedItem: TestimonialItem) {
-  const current = getStoredTestimonials();
+  const current 
+= getStoredTestimonials();
   const updated = current.map((t) => (t.id === updatedItem.id ? updatedItem : t));
   saveTestimonials(updated);
 }
@@ -531,12 +540,12 @@ export async function uploadImageToImgbb(
 
     // 1. Try server proxy endpoint first
     try {
-      const serverRes = await fetch('/api/upload-imgbb', {
+      const serverRes = await fetch('/api/upl
+oad-imgbb', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           image: imageDataOrBase64,
-          apiKey,
           name: imageName,
         }),
       });
@@ -598,7 +607,8 @@ export async function uploadImageToImgbb(
   }
 }
 
-// ================= HERO SLIDES & CONFIG CMS CRUD =================
+// ================= HERO SLIDES &
+ CONFIG CMS CRUD =================
 export function getStoredHeroSlides(): HeroSlideItem[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEYS.HERO_SLIDES);
@@ -660,7 +670,8 @@ export function getStoredHeroConfig(): HeroConfigSettings {
       return DEFAULT_HERO_CONFIG;
     }
     const parsed = JSON.parse(raw);
-    if (parsed.locationsText?.includes('Guwahati • Jorhat') || !parsed.locationsText) {
+    if (parsed.locationsText?.includes('Guwahati • Jorh
+at') || !parsed.locationsText) {
       parsed.locationsText = DEFAULT_HERO_CONFIG.locationsText;
       parsed.locationsTextAs = DEFAULT_HERO_CONFIG.locationsTextAs;
     }
@@ -724,7 +735,8 @@ export function addVideoItem(url: string, title?: string) {
 }
 
 export function updateVideoItem(updatedVideo: VideoItem) {
-  const current = getStoredVideos();
+  const current = getStoredVideos()
+;
   const updated = current.map((v) => (v.id === updatedVideo.id ? updatedVideo : v));
   saveVideos(updated);
 }
@@ -776,7 +788,7 @@ export function resetStorageToDefault() {
   localStorage.setItem(STORAGE_KEYS.VIDEOS, JSON.stringify(DEFAULT_VIDEOS));
   localStorage.setItem(STORAGE_KEYS.BANQUET_MENU, JSON.stringify(DEFAULT_BANQUET_MENU));
   notifyStorageChange();
-  fetch('/api/cms/reset', { method: 'POST' }).then(() => pushAllToBackend()).catch(() => {});
+  fetch('/api/cms/reset', { method: 'POST', headers: authHeaders() }).then(() => pushAllToBackend()).catch(() => {});
 }
 
 // ================= AUTH SESSION =================
@@ -784,11 +796,34 @@ export function isCMSAuthenticated(): boolean {
   return localStorage.getItem(STORAGE_KEYS.AUTH) === 'true';
 }
 
+/** Returns the signed admin session token issued by /api/admin/login, or ''. */
+export function getAdminAuthToken(): string {
+  try { return localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN) || ''; } catch { return ''; }
+}
+
+/** Stores the signed admin session token (and marks the session as authenticated). */
+export function setAdminAuthToken(token: string): void {
+  try {
+    if (token) { localStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, token); localStorage.setItem(STORAGE_KEYS.AUTH, 'true'); }
+    else { localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN); localStorage.removeItem(STORAGE_KEYS.AUTH); }
+  } catch { /* ignore */ }
+  notifyStorageChange();
+}
+
+/** Builds the Authorization header object for protected CMS endpoints. */
+export function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const token = getAdminAuthToken();
+  const headers: Record<string, string> = { ...(extra || {}) };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return headers;
+}
+
 export function setCMSAuthenticated(val: boolean) {
   if (val) {
     localStorage.setItem(STORAGE_KEYS.AUTH, 'true');
   } else {
     localStorage.removeItem(STORAGE_KEYS.AUTH);
+    localStorage.removeItem(STORAGE_KEYS.AUTH_TOKEN);
   }
   notifyStorageChange();
 }

@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 import 'dotenv/config';
 import { GoogleGenAI, Type } from '@google/genai';
 import { createServer as createViteServer } from 'vite';
@@ -16,6 +17,75 @@ const CMS_FILE = path.join(DATA_DIR, 'cms_data.json');
 // Ensure data directory exists
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// -----------------------------------------------------------------------------
+// ADMIN AUTHENTICATION (server-side, credentials never shipped to the client)
+// -----------------------------------------------------------------------------
+// Configure via environment variables on the host (Vercel Project Settings):
+//   ADMIN_USERNAME, ADMIN_PASSWORD, SESSION_SECRET
+// SESSION_SECRET is required for token signing. If missing, auth is disabled
+// and every protected endpoint returns 503 so the site fails closed.
+const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'Tanmoy_Admin';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '';
+const SESSION_SECRET = process.env.SESSION_SECRET || '';
+const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12 hours
+
+/** Constant-time string comparison to blunt timing attacks. */
+function safeEqual(a: string, b: string): boolean {
+  const enc = new TextEncoder();
+  const ab = enc.encode(a);
+  const bb = enc.encode(b);
+  if (ab.length !== bb.length) return false;
+  let diff = 0;
+  for (let i = 0; i < ab.length; i++) diff |= ab[i] ^ bb[i];
+  return diff === 0;
+}
+
+/** Signs a payload string with the session secret (HMAC-SHA256, base64url). */
+function signToken(payloadStr: string): string {
+  return crypto.createHmac('sha256', SESSION_SECRET).update(payloadStr).digest('base64url');
+}
+
+/** Creates and returns a signed session token: base64url(payload).base64url(sig). */
+function createSessionToken(): string {
+  if (!SESSION_SECRET) return '';
+  const payload = { iat: Date.now(), exp: Date.now() + SESSION_TTL_MS };
+  const payloadStr = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = signToken(payloadStr);
+  return `${payloadStr}.${sig}`;
+}
+
+/** Verifies a token's signature and expiry. Returns true only if valid. */
+function verifySessionToken(token: string | undefined | null): boolean {
+  if (!SESSION_SECRET || !token || typeof token !== 'string') return false;
+  const parts = token.split('.');
+  if (parts.length !== 2) return false;
+  const [payloadStr, sig] = parts;
+  const expectedSig = signToken(payloadStr);
+  if (!safeEqual(sig, expectedSig)) return false;
+  try {
+    const payload = JSON.parse(Buffer.from(payloadStr, 'base64url').toString('utf-8'));
+    if (typeof payload?.exp !== 'number' || Date.now() > payload.exp) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Express middleware: rejects requests without a valid admin session token. */
+function requireAdminAuth(req: express.Request, res: express.Response, next: express.NextFunction): void {
+  if (!SESSION_SECRET) {
+    res.status(503).json({ error: 'Server auth not configured (SESSION_SECRET missing). Set ADMIN_USERNAME, ADMIN_PASSWORD, and SESSION_SECRET in your hosting environment.' });
+    return;
+  }
+  const authHeader = req.headers['authorization'] || '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (!verifySessionToken(token)) {
+    res.status(401).json({ error: 'Unauthorized. Please log in again.' });
+    return;
+  }
+  next();
 }
 
 const IBB_MAP_SERVER: Record<string, string> = {
@@ -40,7 +110,8 @@ function getHighResImageUrlServer(url: string): string {
   if (!url) return '';
   let cleaned = url.trim();
   cleaned = cleaned.replace(/\.(md|th|medium|small|thumb)\.(jpg|jpeg|png|webp|gif|avif)/i, '.$2');
-  return cleaned;
+ 
+ return cleaned;
 }
 
 /**
@@ -94,7 +165,8 @@ async function resolveImgbbUrl(inputUrl: string): Promise<string> {
       const response = await fetch(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+          'Accept': 'text/html,application/xhtml+xml,application/
+xml;q=0.9,image/webp,*/*;q=0.8',
         },
         signal: AbortSignal.timeout(6000),
       });
@@ -131,7 +203,8 @@ async function resolveImgbbUrl(inputUrl: string): Promise<string> {
         const ai = new GoogleGenAI({ apiKey });
         const aiRes = await ai.models.generateContent({
           model: 'gemini-3.1-flash-lite',
-          contents: `Given this ImgBB viewer or image URL: "${url}", provide its direct CDN image URL (starting with https://i.ibb.co/). Return ONLY the direct image URL as plain text without any markdown or extra text.`,
+          contents: `Given this ImgBB viewer or image URL: "${url}", provide its d
+irect CDN image URL (starting with https://i.ibb.co/). Return ONLY the direct image URL as plain text without any markdown or extra text.`,
         });
         const resolvedText = aiRes.text?.trim().replace(/^["']|["']$/g, '');
         if (resolvedText && (resolvedText.startsWith('http://') || resolvedText.startsWith('https://'))) {
@@ -152,6 +225,28 @@ async function resolveImgbbUrl(inputUrl: string): Promise<string> {
 }
 
 // API Routes
+
+/**
+ * Admin login endpoint. Validates credentials against server env vars and returns a signed session token.
+ * Credentials are NEVER sent to the client bundle.
+ */
+app.post('/api/admin/login', (req, res) => {
+  try {
+    if (!SESSION_SECRET) return res.status(503).json({ error: 'Server auth not configured. Set ADMIN_USERNAME, ADMIN_PASSWORD, and SESSION_SECRET in your hosting environment.' });
+    const { username, password } = req.body || {};
+    if (typeof username !== 'string' || typeof password !== 'string') return res.status(400).json({ error: 'Username and password are required.' });
+    const usernameOk = safeEqual(username.trim(), ADMIN_USERNAME);
+    const passwordOk = safeEqual(password, ADMIN_PASSWORD);
+    if (!usernameOk || !passwordOk) return res.status(401).json({ error: 'Invalid Admin ID or Password.' });
+    const token = createSessionToken();
+    return res.json({ status: 'ok', token, expiresIn: SESSION_TTL_MS });
+  } catch (err) {
+    console.error('Admin login error:', err);
+    return res.status(500).json({ error: 'Login failed.' });
+  }
+});
+
+/** Public read endpoint (no auth) so the live site can load CMS content. */
 app.get('/api/cms/all', (_req, res) => {
   try {
     if (fs.existsSync(CMS_FILE)) {
@@ -166,7 +261,7 @@ app.get('/api/cms/all', (_req, res) => {
   }
 });
 
-app.post('/api/cms/all', (req, res) => {
+app.post('/api/cms/all', requireAdminAuth, (req, res) => {
   try {
     const payload = req.body;
     fs.writeFileSync(CMS_FILE, JSON.stringify(payload, null, 2), 'utf-8');
@@ -177,7 +272,7 @@ app.post('/api/cms/all', (req, res) => {
   }
 });
 
-app.post('/api/cms/reset', (_req, res) => {
+app.post('/api/cms/reset', requireAdminAuth, (_req, res) => {
   try {
     if (fs.existsSync(CMS_FILE)) {
       fs.unlinkSync(CMS_FILE);
@@ -190,16 +285,18 @@ app.post('/api/cms/reset', (_req, res) => {
 });
 
 /**
- * Direct ImgBB Cloud Upload API endpoint
+ * Direct ImgBB Cloud Upload API endpo
+int
  * Accepts: { image: base64StringOrUrl, apiKey?: string, name?: string }
  * If apiKey is omitted in body, falls back to process.env.IMGBB_API_KEY.
  * Uploads to https://api.imgbb.com/1/upload?key=${key}
  * Returns: { success: true, url: string, display_url: string, delete_url?: string }
  */
-app.post('/api/upload-imgbb', async (req, res) => {
+app.post('/api/upload-imgbb', requireAdminAuth, async (req, res) => {
   try {
-    const { image, apiKey, name } = req.body;
-    const effectiveKey = (apiKey || process.env.IMGBB_API_KEY || '').trim();
+    // SECURITY: only the server-side env key is used. Client-supplied keys are ignored.
+    const { image, name } = req.body;
+    const effectiveKey = (process.env.IMGBB_API_KEY || '').trim();
 
     if (!image) {
       return res.status(400).json({ error: 'Image data is required for upload' });
@@ -247,7 +344,8 @@ app.post('/api/upload-imgbb', async (req, res) => {
     }
 
     // Get direct CDN URL or display URL
-    const directUrl = data?.data?.url || data?.data?.display_url || data?.data?.image?.url;
+    const directUrl = data?.data?.url || data?.data?.display_url || data?.data?.imag
+e?.url;
     return res.json({
       success: true,
       url: directUrl,
@@ -293,7 +391,8 @@ app.get(['/api/open-external', '/bypass-instagram', '/open-external'], (req, res
     res.setHeader('Pragma', 'no-cache');
     res.setHeader('Expires', '0');
 
-    // Self-executing redirect file that opens in external Safari/Chrome
+    // Self-executing redir
+ect file that opens in external Safari/Chrome
     const htmlPayload = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -365,7 +464,8 @@ app.get(['/api/open-external', '/bypass-instagram', '/open-external'], (req, res
   }
 });
 
-// Workaround #2: Deep Linking Protocol Redirector for Chrome
+// Workaround #2: Deep Linking Pro
+tocol Redirector for Chrome
 app.get('/open-in-chrome', (req, res) => {
   const rawTarget = (req.query.url as string) || req.headers.referer || '/';
   let targetUrl = rawTarget;
@@ -419,11 +519,12 @@ app.get('/api/instagram-bypass/info', (req, res) => {
   });
 });
 
-// Real-time ImgBB URL Resolver Endpoint
-app.post('/api/resolve-image', async (req, res) => {
+// Real-time ImgBB URL Resolver Endpoint (admin-only)
+app.post('/api/resolve-image', requireAdminAuth, async (req, res) => {
   try {
     const { url } = req.body;
-    if (!url || typeof url !== 'string') {
+    if (!url || typeof
+ url !== 'string') {
       return res.status(400).json({ error: 'Missing url parameter' });
     }
     const directUrl = await resolveImgbbUrl(url);
@@ -434,8 +535,8 @@ app.post('/api/resolve-image', async (req, res) => {
   }
 });
 
-// Gemini 3.1 Flash Automated Image Naming Endpoint
-app.post('/api/analyze-image', async (req, res) => {
+// Gemini 3.1 Flash Automated Image Naming Endpoint (admin-only)
+app.post('/api/analyze-image', requireAdminAuth, async (req, res) => {
   let catKey = 'entrance';
   try {
     const { imageUrl, category } = req.body;
@@ -469,7 +570,8 @@ app.post('/api/analyze-image', async (req, res) => {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         },
-        signal: AbortSignal.timeout(6000),
+        signal: AbortSignal.timeout(600
+0),
       });
 
       if (imgRes.ok) {
@@ -514,7 +616,8 @@ DO NOT describe it as another section!
 
 Return JSON with:
 - titleEn: Short, elegant English title specifically about ${targetCatInfo.nameEn}
-- titleAs: Authentic Assamese translation of titleEn in Assamese script
+- titleAs: Authentic Assames
+e translation of titleEn in Assamese script
 - category: "${catKey}"
 - descriptionEn: Short 1-sentence English description highlighting ${targetCatInfo.nameEn} setup
 - descriptionAs: Short 1-sentence Assamese description highlighting this setup
@@ -561,7 +664,8 @@ Return JSON with:
         const resultText = response.text || '{}';
         analysis = JSON.parse(resultText);
       } catch (geminiErr: any) {
-        console.warn('Gemini AI Quota/Error (using smart fallback):', geminiErr?.message || geminiErr);
+        console.warn('Gemini AI Quota/Error (using smart fallback):', geminiErr?.mes
+sage || geminiErr);
       }
     }
 
@@ -602,6 +706,7 @@ Return JSON with:
       } else if (catKey === 'reception') {
         analysis = {
           titleEn: 'Royal Banquet Reception Setup',
+
           titleAs: 'ৰাজকীয় ৰিসেপশ্বন প্ৰেক্ষাগৃহ',
           category: 'reception',
           descriptionEn: 'Grand reception banquet decor with royal dining arrangements and lavish floral table centerpieces.',
@@ -645,7 +750,8 @@ Return JSON with:
           titleAs: 'আকৰ্ষণীয় পুষ্পশোভিত প্ৰৱেশ দ্বাৰ',
           category: 'entrance',
           descriptionEn: 'A welcoming Assamese heritage entrance gate adorned with marigolds, Jaapi motifs, and traditional brass lamps.',
-          descriptionAs: 'নৱ-দম্পতীক আদৰিবলৈ সুন্দৰ ফুল আৰু জাপিৰে সজোৱা সাংস্কৃতিক প্ৰৱেশ দ্বাৰ।',
+          descriptionAs: 'নৱ-দম্পতীক আদৰিবলৈ সুন্দ
+ৰ ফুল আৰু জাপিৰে সজোৱা সাংস্কৃতিক প্ৰৱেশ দ্বাৰ।',
           elements: ['Arch Flowers', 'Brass Xorai', 'Jaapi Accents', 'Welcome Arch'],
           badgeTagEn: 'Entrance Gate',
           badgeTagAs: 'প্ৰৱেশ দ্বাৰ'
@@ -677,7 +783,8 @@ Return JSON with:
           badgeTagEn: 'Reception Banquet',
           badgeTagAs: 'ৰিসেপশ্বন'
         } : {
-          titleEn: 'Sacred Assamese Wedding Mandap',
+          titleEn: 'Sacred Assamese Wedding Man
+dap',
           titleAs: 'পৱিত্ৰ অসমীয়া বিবাহ মণ্ডপ',
           category: 'mandap',
           descriptionEn: 'Traditional sacred wedding mandap decorated with fresh flowers, banana stems, and auspicious brass lamps.',
@@ -734,7 +841,8 @@ app.post('/api/translate', async (req, res) => {
     const apiKey = process.env.GEMINI_API_KEY;
     if (apiKey) {
       try {
-        const ai = new GoogleGenAI({
+        cons
+t ai = new GoogleGenAI({
           apiKey,
           httpOptions: {
             headers: {
@@ -788,7 +896,8 @@ ${trimmedText}`;
       status: 'ok',
       translatedText: translatedText || trimmedText,
     });
-  } catch (err: any) {
+  
+} catch (err: any) {
     return res.json({ status: 'ok', translatedText: req.body?.text || '' });
   }
 });
